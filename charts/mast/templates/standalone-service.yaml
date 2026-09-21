@@ -29,6 +29,11 @@ spec:
       port: {{ .Values.edge.wsPort }}
       targetPort: mqtt-ws
     {{- end }}
+    {{- if .Values.metrics.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+    {{- end }}
     - name: monitor
       port: 8222
       targetPort: monitor
