@@ -17,9 +17,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
-          version: v3.16.3
+          # Keep this in step with the Helm people actually run locally.
+          # Validating against 3.x in CI while the chart is authored against
+          # 4.x means a template can pass one and fail the other.
+          version: v4.3.0
 
       - run: helm lint charts/mast
 
@@ -40,7 +43,7 @@ jobs:
       # which helm lint does not do.
       - uses: bmuschko/setup-kubeconform@v1
         with:
-          kubeconform-version: "0.6.7"
+          kubeconform-version: "0.8.0"
 
       - name: validate manifests
         run: |
