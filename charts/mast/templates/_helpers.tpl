@@ -70,6 +70,7 @@ never sit in a ConfigMap.
 mode = {{ .Values.auth.mode | quote }}
 
 [auth.http]
+wire = {{ .Values.auth.http.wire | default "mast" | quote }}
 authn_url = {{ .Values.auth.http.authnUrl | quote }}
 authz_url = {{ .Values.auth.http.authzUrl | quote }}
 timeout = {{ .Values.auth.http.timeout | quote }}

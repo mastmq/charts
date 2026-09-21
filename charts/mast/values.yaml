@@ -54,6 +54,11 @@ edge:
     type: ClusterIP
     mqttPort: 1883
     annotations: {}
+
+  # A second listener that skips authentication and authorization, for
+  # trusted in-cluster services. Zero disables it. Whatever reaches it is
+  # trusted completely, so never expose it beyond the cluster.
+  internalPort: 0
   # Budget memory as roughly 40-80KB per TLS connection plus headroom, and
   # remember that maxWritesPending multiplies by connections per pod, not by
   # the whole fleet.
@@ -88,7 +93,15 @@ auth:
   tenantDefault: default
 
   http:
-    # Posted on CONNECT; must return {"allow":true,"tenant":"..."}.
+    # Request and response shape.
+    #   mast: the service names the tenant, which is what multi-tenancy needs.
+    #   emqx: EMQX v5's http backend shape, so an auth service written for
+    #         EMQX works unchanged. EMQX has no tenant field, so
+    #         auth.tenantDefault applies.
+    wire: mast
+
+    # Posted on CONNECT; must return {"allow":true,"tenant":"..."}, or
+    # {"result":"allow"} under the emqx wire.
     authnUrl: ""
     # Posted per publish and subscribe; must return {"allow":true}.
     # Empty means an authenticated connection may use any topic inside its

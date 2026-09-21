@@ -48,6 +48,10 @@ spec:
           ports:
             - name: mqtt
               containerPort: 1883
+            {{- if gt (int .Values.edge.internalPort) 0 }}
+            - name: mqtt-internal
+              containerPort: {{ .Values.edge.internalPort }}
+            {{- end }}
             - name: monitor
               containerPort: 8222
             - name: metrics

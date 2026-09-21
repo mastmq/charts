@@ -16,6 +16,9 @@ data:
 
     [mqtt]
     addr = "0.0.0.0:1883"
+    {{- if gt (int .Values.edge.internalPort) 0 }}
+    internal_addr = "0.0.0.0:{{ .Values.edge.internalPort }}"
+    {{- end }}
     max_writes_pending = {{ .Values.edge.maxWritesPending }}
 
     [nats]

@@ -19,6 +19,11 @@ spec:
     - name: mqtt
       port: {{ .Values.edge.service.mqttPort }}
       targetPort: mqtt
+    {{- if gt (int .Values.edge.internalPort) 0 }}
+    - name: mqtt-internal
+      port: {{ .Values.edge.internalPort }}
+      targetPort: mqtt-internal
+    {{- end }}
     - name: monitor
       port: 8222
       targetPort: monitor
