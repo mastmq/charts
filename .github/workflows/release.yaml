@@ -16,9 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
-          version: v3.16.3
+          # Same Helm the lint workflow validates with. Packaging with 3.x
+          # while the chart is linted and authored against 4.x is the exact
+          # mismatch lint.yaml warns about, and here it would ship.
+          version: v4.3.0
 
       - name: log in to ghcr
         run: |
