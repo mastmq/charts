@@ -151,6 +151,17 @@ serviceAccount:
   name: ""
   annotations: {}
 
+# Annotations on the workload itself (StatefulSet or Deployment), as
+# distinct from podAnnotations which land on the pod template.
+#
+# The case this exists for: replacing another broker under the same name.
+# A StatefulSet's selector is immutable, so a tool that patches in place
+# fails with "updates to statefulset spec ... are forbidden" and the
+# migration stops halfway. Under Argo CD, setting
+# argocd.argoproj.io/sync-options: Replace=true here lets the sync delete
+# and recreate it instead.
+workloadAnnotations: {}
+
 podAnnotations: {}
 podLabels: {}
 

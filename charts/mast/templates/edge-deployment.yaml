@@ -3,6 +3,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "mast.edge.fullname" . }}
+  {{- with .Values.workloadAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   labels:
     {{- include "mast.labels" . | nindent 4 }}
     app.kubernetes.io/component: edge
