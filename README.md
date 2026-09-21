@@ -2,6 +2,8 @@
 
 # charts
 
+Part of [mast](https://mastmq.github.io/), a multi-tenant MQTT broker built on core NATS.
+
 Helm charts for [mast](https://github.com/mastmq/mast), a multi-tenant MQTT broker built on core NATS.
 
 | Chart | Description |
