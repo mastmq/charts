@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/mastmq/.github/main/assets/mark-256.png" alt="mast" width="88" align="right">
+
 # charts
 
 Helm charts for [mast](https://github.com/mastmq/mast), a multi-tenant MQTT broker built on core NATS.
