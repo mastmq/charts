@@ -23,6 +23,16 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+# Extra environment for every mast container.
+#
+# On OpenShift you almost certainly want GODEBUG=multipathtcp=0. Go enables
+# multipath TCP on listeners by default from 1.24, and the OpenShift
+# dataplane does not handle it: connections are accepted and then every read
+# fails with "permission denied", which looks like a broker fault and is not.
+extraEnv: []
+#  - name: GODEBUG
+#    value: multipathtcp=0
+
 log:
   level: info
   # json in a cluster; the text handler is for a terminal.
@@ -59,6 +69,11 @@ edge:
   # trusted in-cluster services. Zero disables it. Whatever reaches it is
   # trusted completely, so never expose it beyond the cluster.
   internalPort: 0
+
+  # MQTT over WebSocket, for browsers and anything behind an HTTP ingress.
+  # Zero disables it. Authentication applies here exactly as it does on the
+  # plain listener.
+  wsPort: 0
   # Budget memory as roughly 40-80KB per TLS connection plus headroom, and
   # remember that maxWritesPending multiplies by connections per pod, not by
   # the whole fleet.
@@ -139,6 +154,10 @@ serviceAccount:
 podAnnotations: {}
 podLabels: {}
 
+# On OpenShift the restricted SCC assigns a uid from the namespace range and
+# rejects a pod that asks for its own, so null these out and let the platform
+# choose. Setting them to {} is not enough: Helm deep-merges maps, so only an
+# explicit null removes a default.
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 65532

@@ -24,6 +24,11 @@ spec:
       port: {{ .Values.edge.internalPort }}
       targetPort: mqtt-internal
     {{- end }}
+    {{- if gt (int .Values.edge.wsPort) 0 }}
+    - name: mqtt-ws
+      port: {{ .Values.edge.wsPort }}
+      targetPort: mqtt-ws
+    {{- end }}
     - name: monitor
       port: 8222
       targetPort: monitor

@@ -29,21 +29,29 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.podSecurityContext }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       terminationGracePeriodSeconds: 60
       containers:
         - name: mast
           image: {{ include "mast.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["--config", "/etc/mast/mast.toml"]
+          {{- with .Values.securityContext }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- if eq .Values.auth.mode "http" }}
           envFrom:
             - secretRef:
                 name: {{ include "mast.authSecretName" . }}
                 optional: true
+          {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           ports:
             - name: mqtt
@@ -51,6 +59,10 @@ spec:
             {{- if gt (int .Values.edge.internalPort) 0 }}
             - name: mqtt-internal
               containerPort: {{ .Values.edge.internalPort }}
+            {{- end }}
+            {{- if gt (int .Values.edge.wsPort) 0 }}
+            - name: mqtt-ws
+              containerPort: {{ .Values.edge.wsPort }}
             {{- end }}
             - name: monitor
               containerPort: 8222

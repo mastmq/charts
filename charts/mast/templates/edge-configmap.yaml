@@ -19,6 +19,9 @@ data:
     {{- if gt (int .Values.edge.internalPort) 0 }}
     internal_addr = "0.0.0.0:{{ .Values.edge.internalPort }}"
     {{- end }}
+    {{- if gt (int .Values.edge.wsPort) 0 }}
+    ws_addr = "0.0.0.0:{{ .Values.edge.wsPort }}"
+    {{- end }}
     max_writes_pending = {{ .Values.edge.maxWritesPending }}
 
     [nats]
