@@ -1,0 +1,31 @@
+{{- if eq .Values.mode "cluster" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mast.edge.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+data:
+  mast.toml: |
+    role = "edge"
+
+    [log]
+    level = {{ .Values.log.level | quote }}
+    format = {{ .Values.log.format | quote }}
+
+    [mqtt]
+    addr = "0.0.0.0:1883"
+    max_writes_pending = {{ .Values.edge.maxWritesPending }}
+
+    [nats]
+    monitor_addr = "0.0.0.0:8222"
+
+    [edge]
+    core_urls = ["nats-leaf://{{ include "mast.core.fullname" . }}.{{ .Release.Namespace }}.svc:7422"]
+
+    {{ include "mast.authConfig" . | nindent 4 }}
+
+    [obs]
+    addr = "0.0.0.0:{{ .Values.metrics.port }}"
+{{- end }}

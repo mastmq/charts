@@ -1,0 +1,138 @@
+---
+# mast deploys in one of two shapes.
+#
+# standalone runs a single all-in-one process: one pod, file-backed
+# JetStream, no cluster. It is the right answer for an edge site, a lab, or
+# anything small enough not to need two tiers.
+#
+# cluster splits the two jobs that have opposite operational shapes. The core
+# tier holds Raft and the KV buckets, so it wants stable peers and volumes and
+# is a StatefulSet. The edge tier terminates MQTT, scales with connection
+# count and restarts on every deploy, so it is a stateless Deployment that
+# joins the core as NATS leaf nodes. Coupling them would turn every autoscale
+# event into Raft membership churn.
+mode: cluster
+
+image:
+  repository: ghcr.io/mastmq/mast
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+log:
+  level: info
+  # json in a cluster; the text handler is for a terminal.
+  format: json
+
+# Applies to standalone and to the core tier.
+core:
+  replicas: 3
+  # Replication factor for the KV buckets. Keep this at or below
+  # core.replicas, and use 3 for anything you care about.
+  jetstreamReplicas: 3
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+edge:
+  replicas: 2
+  service:
+    type: ClusterIP
+    mqttPort: 1883
+    annotations: {}
+  # Budget memory as roughly 40-80KB per TLS connection plus headroom, and
+  # remember that maxWritesPending multiplies by connections per pod, not by
+  # the whole fleet.
+  maxWritesPending: 1024
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+  # A deploy that cycles every edge pod at once reconnects the whole fleet at
+  # once. Keep this tight.
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+auth:
+  # static: one tenant, everything allowed. Only appropriate where the
+  #         deployment itself is the security boundary.
+  # http:   ask your own service, posting the MQTT fields as JSON.
+  mode: static
+
+  # Used in static mode.
+  tenantDefault: default
+
+  http:
+    # Posted on CONNECT; must return {"allow":true,"tenant":"..."}.
+    authnUrl: ""
+    # Posted per publish and subscribe; must return {"allow":true}.
+    # Empty means an authenticated connection may use any topic inside its
+    # own tenant.
+    authzUrl: ""
+    timeout: 2s
+    # Authorization behaviour when the service is unreachable: deny makes an
+    # outage look like a broker outage, allow makes it look like an open
+    # door. Authentication always fails closed regardless of this setting.
+    onError: deny
+    # Authorization is asked on every publish, so 0s costs a round trip per
+    # message.
+    cacheTtl: 1m
+    cacheSize: 100000
+    # Headers sent with every auth request. Rendered into a Secret.
+    headers: {}
+    #  Authorization: "Bearer ..."
+    # Or point at a Secret you manage yourself, whose keys are header names.
+    existingSecret: ""
+
+metrics:
+  enabled: true
+  port: 9090
+  # Requires the Prometheus operator CRDs.
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

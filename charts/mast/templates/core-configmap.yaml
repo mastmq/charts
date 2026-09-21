@@ -1,0 +1,30 @@
+{{- if eq .Values.mode "cluster" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mast.core.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+data:
+  mast.toml: |
+    role = "core"
+
+    [log]
+    level = {{ .Values.log.level | quote }}
+    format = {{ .Values.log.format | quote }}
+
+    [nats]
+    client_addr = "0.0.0.0:4222"
+    monitor_addr = "0.0.0.0:8222"
+
+    [core]
+    store_dir = "/data"
+    replicas = {{ .Values.core.jetstreamReplicas }}
+    listen_addr = "0.0.0.0:6222"
+    leaf_addr = "0.0.0.0:7422"
+    routes = [{{ include "mast.coreRoutes" . }}]
+
+    [obs]
+    addr = "0.0.0.0:{{ .Values.metrics.port }}"
+{{- end }}

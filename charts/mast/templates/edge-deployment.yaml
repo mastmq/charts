@@ -1,0 +1,99 @@
+{{- if eq .Values.mode "cluster" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mast.edge.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+spec:
+  {{- if not .Values.edge.autoscaling.enabled }}
+  replicas: {{ .Values.edge.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "mast.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: edge
+  strategy:
+    rollingUpdate:
+      # Replacing an edge pod reconnects every device on it. Roll one at a
+      # time and let the fleet settle between steps.
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/edge-configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "mast.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: edge
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "mast.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      # Long enough for connected devices to be handed over rather than cut.
+      terminationGracePeriodSeconds: 90
+      containers:
+        - name: mast
+          image: {{ include "mast.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--config", "/etc/mast/mast.toml"]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if eq .Values.auth.mode "http" }}
+          envFrom:
+            - secretRef:
+                name: {{ include "mast.authSecretName" . }}
+                optional: true
+          {{- end }}
+          ports:
+            - name: mqtt
+              containerPort: 1883
+            - name: monitor
+              containerPort: 8222
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+          readinessProbe:
+            tcpSocket:
+              port: mqtt
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.edge.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mast
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "mast.edge.fullname" . }}
+      {{- with .Values.edge.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.edge.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.edge.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

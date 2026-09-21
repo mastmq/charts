@@ -1,0 +1,25 @@
+{{- if eq .Values.mode "standalone" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mast.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: standalone
+  {{- with .Values.edge.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.edge.service.type }}
+  selector:
+    {{- include "mast.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: standalone
+  ports:
+    - name: mqtt
+      port: {{ .Values.edge.service.mqttPort }}
+      targetPort: mqtt
+    - name: monitor
+      port: 8222
+      targetPort: monitor
+{{- end }}

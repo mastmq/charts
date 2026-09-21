@@ -1,0 +1,32 @@
+{{- if eq .Values.mode "standalone" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mast.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: standalone
+data:
+  mast.toml: |
+    role = "all-in-one"
+
+    [log]
+    level = {{ .Values.log.level | quote }}
+    format = {{ .Values.log.format | quote }}
+
+    [mqtt]
+    addr = "0.0.0.0:1883"
+    max_writes_pending = {{ .Values.edge.maxWritesPending }}
+
+    [nats]
+    monitor_addr = "0.0.0.0:8222"
+
+    [core]
+    store_dir = "/data"
+    replicas = 1
+
+    {{ include "mast.authConfig" . | nindent 4 }}
+
+    [obs]
+    addr = "0.0.0.0:{{ .Values.metrics.port }}"
+{{- end }}

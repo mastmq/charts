@@ -1,0 +1,54 @@
+---
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+
+      - run: helm lint charts/mast
+
+      # Render every shape the chart supports. A template that only renders
+      # under default values is a template that breaks the first time someone
+      # turns a feature on.
+      - name: render default values
+        run: helm template mast charts/mast > /dev/null
+
+      - name: render each ci values file
+        run: |
+          for f in charts/mast/ci/*-values.yaml; do
+            echo "rendering with $f"
+            helm template mast charts/mast -f "$f" > /dev/null
+          done
+
+      # Validate the rendered manifests against the real Kubernetes schemas,
+      # which helm lint does not do.
+      - uses: bmuschko/setup-kubeconform@v1
+        with:
+          kubeconform-version: "0.6.7"
+
+      - name: validate manifests
+        run: |
+          for f in /dev/null charts/mast/ci/*-values.yaml; do
+            args=""
+            [ "$f" = "/dev/null" ] || args="-f $f"
+            # shellcheck disable=SC2086
+            helm template mast charts/mast $args \
+              | kubeconform -strict -summary -ignore-missing-schemas \
+                  -schema-location default
+          done

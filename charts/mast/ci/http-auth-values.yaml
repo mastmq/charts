@@ -1,0 +1,15 @@
+---
+mode: cluster
+auth:
+  mode: http
+  http:
+    authnUrl: http://policy.example/auth
+    authzUrl: http://policy.example/acl
+    headers:
+      Authorization: "Bearer test"
+edge:
+  autoscaling:
+    enabled: true
+metrics:
+  serviceMonitor:
+    enabled: true

@@ -1,0 +1,30 @@
+{{- if eq .Values.mode "cluster" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mast.core.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  # Headless: peers address each other by stable pod DNS, and edges dial the
+  # service name to reach any core for their leaf connection.
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "mast.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+  ports:
+    - name: cluster
+      port: 6222
+      targetPort: cluster
+    - name: leaf
+      port: 7422
+      targetPort: leaf
+    - name: nats
+      port: 4222
+      targetPort: nats
+    - name: monitor
+      port: 8222
+      targetPort: monitor
+{{- end }}

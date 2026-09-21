@@ -1,0 +1,89 @@
+{{- if eq .Values.mode "standalone" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mast.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: standalone
+spec:
+  serviceName: {{ include "mast.fullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mast.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: standalone
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/standalone-configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "mast.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: standalone
+    spec:
+      serviceAccountName: {{ include "mast.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: mast
+          image: {{ include "mast.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--config", "/etc/mast/mast.toml"]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if eq .Values.auth.mode "http" }}
+          envFrom:
+            - secretRef:
+                name: {{ include "mast.authSecretName" . }}
+                optional: true
+          {{- end }}
+          ports:
+            - name: mqtt
+              containerPort: 1883
+            - name: monitor
+              containerPort: 8222
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+          readinessProbe:
+            tcpSocket:
+              port: mqtt
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.core.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/mast
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "mast.fullname" . }}
+        {{- if not .Values.core.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if .Values.core.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.core.persistence.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.core.persistence.size }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,18 @@
+---
+apiVersion: v2
+name: mast
+description: Multi-tenant MQTT broker built on core NATS
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/mastmq/mast
+sources:
+  - https://github.com/mastmq/mast
+keywords:
+  - mqtt
+  - nats
+  - iot
+  - multi-tenant
+maintainers:
+  - name: mastmq
+    url: https://github.com/mastmq
