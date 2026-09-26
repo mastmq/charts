@@ -53,10 +53,8 @@ spec:
                 name: {{ include "mast.authSecretName" . }}
                 optional: true
           {{- end }}
-          {{- with .Values.extraEnv }}
           env:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- include "mast.env" . | nindent 12 }}
           ports:
             - name: mqtt
               containerPort: 1883

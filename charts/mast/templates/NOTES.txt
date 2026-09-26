@@ -31,10 +31,3 @@ WARNING: auth.mode is "static". Every connection lands in the tenant
 and wrong for anything reachable by someone else. Set auth.mode=http and
 point auth.http.authnUrl at a service that names the tenant per connection.
 {{- end }}
-
-{{- if and (eq .Values.mode "cluster") (gt (int .Values.core.jetstreamReplicas) (int .Values.core.replicas)) }}
-
-WARNING: core.jetstreamReplicas ({{ .Values.core.jetstreamReplicas }}) exceeds core.replicas
-({{ .Values.core.replicas }}). Streams cannot reach that replication factor and will fail
-to create.
-{{- end }}

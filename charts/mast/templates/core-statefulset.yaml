@@ -1,4 +1,7 @@
 {{- if eq .Values.mode "cluster" }}
+{{- if gt (int .Values.core.jetstreamReplicas) (int .Values.core.replicas) }}
+{{- fail (printf "core.jetstreamReplicas (%d) exceeds core.replicas (%d): the KV buckets cannot be created at that replication factor" (int .Values.core.jetstreamReplicas) (int .Values.core.replicas)) }}
+{{- end }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -54,10 +57,8 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.extraEnv }}
           env:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- include "mast.env" . | nindent 12 }}
           ports:
             - name: cluster
               containerPort: 6222
@@ -69,18 +70,38 @@ spec:
               containerPort: 8222
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
+          # Liveness and readiness ask different questions on purpose. A bare
+          # /healthz also checks JetStream, which is unhealthy exactly while a
+          # peer is catching up or the meta group has lost quorum; used for
+          # liveness, it has the kubelet kill the peers that are trying to
+          # recover, which keeps quorum lost. js-server-only asks only whether
+          # the server accepts connections, which is what a restart can fix.
+          #
+          # The monitor port comes up before JetStream has restored its
+          # streams, and the client listener only after, so on a large store
+          # even js-server-only fails for a while at boot. The startup probe
+          # is that grace, and it is generous because the alternative is a
+          # restart loop that never finishes a restore.
+          startupProbe:
+            httpGet:
+              path: /healthz?js-server-only=true
+              port: monitor
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz?js-server-only=true
+              port: monitor
+            periodSeconds: 20
+            failureThreshold: 3
+          # Readiness keeps the full check. The headless Service publishes
+          # not-ready addresses, so this gates rollouts and the PDB rather
+          # than peer discovery.
           readinessProbe:
             httpGet:
               path: /healthz
               port: monitor
-            initialDelaySeconds: 5
             periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: monitor
-            initialDelaySeconds: 15
-            periodSeconds: 20
           resources:
             {{- toYaml .Values.core.resources | nindent 12 }}
           volumeMounts:

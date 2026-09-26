@@ -1,0 +1,15 @@
+{{- if and (eq .Values.mode "cluster") .Values.core.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "mast.core.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  maxUnavailable: {{ .Values.core.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "mast.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+{{- end }}

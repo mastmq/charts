@@ -25,6 +25,51 @@
 {{- printf "%s-edge" (include "mast.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{/*
+The Service that carries what must never leave the cluster: the
+unauthenticated internal listener, metrics (which also serves pprof) and the
+NATS monitor. Named after the public Service it sits beside, so a
+fullnameOverride that keeps the public name also predicts this one.
+*/}}
+{{- define "mast.internal.fullname" -}}
+{{- if eq .Values.mode "standalone" }}
+{{- printf "%s-internal" (include "mast.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-internal" (include "mast.edge.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Environment for every mast container: the pod's own name as the NATS server
+name, then extraEnv.
+
+Without a name every pod in a role falls back to the same "mast-core" or
+"mast-edge". A core closes a route from a peer carrying its own name, and a
+leaf connection under a name already attached evicts the previous one, so
+edges knock each other off in turn. The pod name
+is unique per role and, on a StatefulSet, stable across restarts, which is
+what Raft wants. An extraEnv entry of the same name replaces it rather than
+being appended as a duplicate, because a duplicated env name is rejected by
+server-side apply.
+*/}}
+{{- define "mast.env" -}}
+{{- $override := false }}
+{{- range .Values.extraEnv }}
+{{- if eq .name "MAST__NATS__NAME" }}
+{{- $override = true }}
+{{- end }}
+{{- end }}
+{{- if not $override }}
+- name: MAST__NATS__NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
+{{- end }}
+{{- with .Values.extraEnv }}
+{{ toYaml . }}
+{{- end }}
+{{- end }}
+
 {{- define "mast.labels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{ include "mast.selectorLabels" . }}

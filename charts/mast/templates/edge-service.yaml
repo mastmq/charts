@@ -11,6 +11,8 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  # Client-facing ports only. This Service is the one a LoadBalancer or an
+  # ingress points at, so anything on it is as public as the broker is.
   type: {{ .Values.edge.service.type }}
   selector:
     {{- include "mast.selectorLabels" . | nindent 4 }}
@@ -19,19 +21,41 @@ spec:
     - name: mqtt
       port: {{ .Values.edge.service.mqttPort }}
       targetPort: mqtt
-    {{- if gt (int .Values.edge.internalPort) 0 }}
-    - name: mqtt-internal
-      port: {{ .Values.edge.internalPort }}
-      targetPort: mqtt-internal
-    {{- end }}
     {{- if gt (int .Values.edge.wsPort) 0 }}
     - name: mqtt-ws
       port: {{ .Values.edge.wsPort }}
       targetPort: mqtt-ws
+    {{- end }}
+---
+# Everything that must stay in the cluster: the internal listener trusts
+# whatever reaches it completely, the metrics port also serves pprof, and
+# the NATS monitor exposes connection and subject detail. They used to share
+# the public Service, so edge.service.type=LoadBalancer published all three.
+# The type is pinned rather than following edge.service.type for that reason.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mast.internal.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "mast.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: edge
+  ports:
+    {{- if gt (int .Values.edge.internalPort) 0 }}
+    - name: mqtt-internal
+      port: {{ .Values.edge.internalPort }}
+      targetPort: mqtt-internal
     {{- end }}
     {{- if .Values.metrics.enabled }}
     - name: metrics
       port: {{ .Values.metrics.port }}
       targetPort: metrics
     {{- end }}
+    - name: monitor
+      port: 8222
+      targetPort: monitor
 {{- end }}

@@ -41,9 +41,16 @@ log:
 # Applies to standalone and to the core tier.
 core:
   replicas: 3
-  # Replication factor for the KV buckets. Keep this at or below
-  # core.replicas, and use 3 for anything you care about.
+  # Replication factor for the KV buckets. Must not exceed core.replicas,
+  # and the chart refuses to render if it does. Use 3 for anything you care
+  # about.
   jetstreamReplicas: 3
+  # A node drain that takes two of three core peers at once loses Raft
+  # quorum, and every KV write stalls until they come back. One at a time
+  # keeps a majority through any voluntary disruption.
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
   persistence:
     enabled: true
     size: 10Gi
@@ -60,6 +67,10 @@ core:
 
 edge:
   replicas: 2
+  # The client-facing Service: MQTT and, when enabled, WebSocket. The
+  # internal listener, metrics and the NATS monitor are on a separate
+  # <name>-internal Service that is always ClusterIP, so setting type here
+  # to LoadBalancer publishes only what devices are meant to reach.
   service:
     type: ClusterIP
     mqttPort: 1883
@@ -67,7 +78,9 @@ edge:
 
   # A second listener that skips authentication and authorization, for
   # trusted in-cluster services. Zero disables it. Whatever reaches it is
-  # trusted completely, so never expose it beyond the cluster.
+  # trusted completely, so it is served only on the ClusterIP <name>-internal
+  # Service. Still pair it with a NetworkPolicy: ClusterIP keeps it off the
+  # internet, not away from every pod in the cluster.
   internalPort: 0
 
   # MQTT over WebSocket, for browsers and anything behind an HTTP ingress.
@@ -134,7 +147,13 @@ auth:
     # Headers sent with every auth request. Rendered into a Secret.
     headers: {}
     #  Authorization: "Bearer ..."
-    # Or point at a Secret you manage yourself, whose keys are header names.
+    # Or point at a Secret you manage yourself. It is loaded with envFrom,
+    # so its keys are environment variable names, not header names: the
+    # header name upper-cased, hyphens as underscores, behind
+    # MAST__AUTH__HTTP__HEADERS__. Authorization becomes
+    # MAST__AUTH__HTTP__HEADERS__AUTHORIZATION and X-Api-Key becomes
+    # MAST__AUTH__HTTP__HEADERS__X_API_KEY. A key without the prefix is
+    # silently ignored.
     existingSecret: ""
 
 metrics:
