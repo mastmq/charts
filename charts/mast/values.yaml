@@ -156,6 +156,36 @@ auth:
     # silently ignored.
     existingSecret: ""
 
+# How messages cross between nodes. QoS 1 and 2 are stored on one replicated
+# JetStream stream before they are acknowledged, and every node reads it
+# through one consumer of its own, so a node cut off from the core for a
+# moment catches up instead of losing what was published for its clients.
+# QoS 0 never touches it. Turning durableQoS off makes cross-node QoS 1 and 2
+# at-most-once again; it exists for rollouts and measurement.
+fabric:
+  durableQoS: true
+  # How long the stream keeps a message: how long a node can be cut off
+  # and still catch up.
+  durableMaxAge: 5m
+
+session:
+  # How long a disconnected persistent session and its queued QoS 1/2
+  # messages are kept, counted from DISCONNECT.
+  expiry: 24h
+
+# Restricts who can reach the pods. Off by default because a policy that
+# selects a pod turns every port not listed into denied, and the right peers
+# are cluster-specific. Note that Kubernetes policies only ever add allowed
+# traffic: in a namespace that already allows everything from everywhere
+# (OpenShift projects often carry an allow-from-all-namespaces policy), this
+# restricts nothing, and the internal listener stays reachable.
+networkPolicy:
+  enabled: false
+  # Peers besides pods in the release's own namespace that may reach the
+  # unauthenticated internal listener, metrics and the NATS monitor, as
+  # NetworkPolicyPeer objects — typically the monitoring namespace.
+  internalFrom: []
+
 metrics:
   enabled: true
   port: 9090

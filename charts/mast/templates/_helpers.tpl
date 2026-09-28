@@ -140,3 +140,16 @@ its stable pod DNS name, which is the reason core is a StatefulSet.
 {{- end -}}
 {{ join ", " $routes }}
 {{- end }}
+
+{{/*
+The [fabric] and [session] sections, shared by the roles that terminate
+MQTT. A core runs no bridge, so neither applies to it.
+*/}}
+{{- define "mast.fabricConfig" -}}
+[fabric]
+durable_qos = {{ .Values.fabric.durableQoS }}
+durable_max_age = {{ .Values.fabric.durableMaxAge | quote }}
+
+[session]
+expiry = {{ .Values.session.expiry | quote }}
+{{- end }}

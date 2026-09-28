@@ -1,0 +1,16 @@
+# Renders the NetworkPolicies in cluster mode with every optional port on, so
+# a template that only works with internalPort or wsPort disabled fails CI.
+networkPolicy:
+  enabled: true
+  internalFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+edge:
+  internalPort: 11883
+  wsPort: 8083
+fabric:
+  durableQoS: false
+  durableMaxAge: 1m
+session:
+  expiry: 12h

@@ -69,9 +69,19 @@ The split exists because `edge.service.type: LoadBalancer` used to publish every
 | `auth.mode` | `static` | `static` or `http` |
 | `auth.http.onError` | `deny` | Authorization only |
 | `auth.http.cacheTtl` | `1m` | `0s` disables caching |
-| `metrics.serviceMonitor.enabled` | `false` | Needs the Prometheus operator CRDs |
+| `fabric.durableQoS` | `true` | Stores QoS 1 and 2 on a replicated stream before acknowledging, so they survive a node being cut off; `false` makes them at-most-once across nodes |
+| `fabric.durableMaxAge` | `5m` | How long a node can be cut off and still catch up |
+| `session.expiry` | `24h` | How long a persistent session is kept after DISCONNECT |
+| `networkPolicy.enabled` | `false` | MQTT from anywhere; internal listener, metrics and monitor from this namespace and `networkPolicy.internalFrom` only |
+| `metrics.serviceMonitor.enabled` | `false` | Needs the Prometheus operator CRDs. Scrapes edges, standalone and cores |
 
 Run `helm show values oci://ghcr.io/mastmq/charts/mast` for the full list.
+
+## Network policy
+
+`networkPolicy.enabled` adds a policy per role. On an edge or a standalone pod, MQTT and MQTT over WebSocket are open to anyone who can route to the pod, and the unauthenticated internal listener, metrics (which serves pprof) and the NATS monitor are open only to pods in the release's namespace and to the peers in `networkPolicy.internalFrom`. A core accepts only from the same set.
+
+Kubernetes network policies can only add allowed traffic, never subtract it. In a namespace that already allows everything from everywhere — OpenShift projects commonly carry an `allow-from-all-namespaces` policy — enabling this restricts nothing, and the internal listener stays reachable cluster-wide. Check `kubectl get networkpolicy` before relying on it, and if the namespace allows everything and the internal listener is not needed, set `edge.internalPort: 0` instead.
 
 ## Operational notes
 

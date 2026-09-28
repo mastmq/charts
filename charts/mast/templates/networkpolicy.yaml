@@ -1,0 +1,58 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $component := ternary "standalone" "edge" (eq .Values.mode "standalone") }}
+# Client-facing MQTT is open to anyone who can route to the pod; everything
+# else — the unauthenticated internal listener, metrics with pprof, and the
+# NATS monitor — only to pods in this namespace and internalFrom.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "mast.fullname" . }}-{{ $component }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "mast.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - ports:
+        - port: mqtt
+        {{- if gt (int .Values.edge.wsPort) 0 }}
+        - port: mqtt-ws
+        {{- end }}
+    - from:
+        - podSelector: {}
+        {{- with .Values.networkPolicy.internalFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      ports:
+        {{- if gt (int .Values.edge.internalPort) 0 }}
+        - port: mqtt-internal
+        {{- end }}
+        - port: metrics
+        - port: monitor
+{{- if eq .Values.mode "cluster" }}
+---
+# The core terminates no MQTT. Only the edges and the other cores, all in
+# this namespace, need its routes, leaf port and client port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "mast.fullname" . }}-core
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "mast.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+        {{- with .Values.networkPolicy.internalFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}
+{{- end }}

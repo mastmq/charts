@@ -27,4 +27,10 @@ spec:
     - name: monitor
       port: 8222
       targetPort: monitor
+    # The core serves /metrics like every other role. Without this port the
+    # ServiceMonitor, which selects this Service by label, found nothing to
+    # scrape on the node holding Raft and every bucket.
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
 {{- end }}

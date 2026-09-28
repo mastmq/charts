@@ -32,6 +32,8 @@ data:
 
     {{ include "mast.authConfig" . | nindent 4 }}
 
+    {{ include "mast.fabricConfig" . | nindent 4 }}
+
     [obs]
     addr = "0.0.0.0:{{ .Values.metrics.port }}"
 {{- end }}
