@@ -83,10 +83,12 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+            {{- with (include "mast.secretMounts" . | trim) }}{{ . | nindent 12 }}{{ end }}
       volumes:
         - name: config
           configMap:
             name: {{ include "mast.fullname" . }}
+        {{- with (include "mast.secretVolumes" . | trim) }}{{ . | nindent 8 }}{{ end }}
         {{- if not .Values.core.persistence.enabled }}
         - name: data
           emptyDir: {}

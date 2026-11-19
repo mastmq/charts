@@ -23,6 +23,7 @@ data:
     ws_addr = "0.0.0.0:{{ .Values.edge.wsPort }}"
     {{- end }}
     max_writes_pending = {{ .Values.edge.maxWritesPending }}
+    {{- if .Values.tls.secretName }}{{ include "mast.tlsConfig" . | trim | nindent 4 }}{{ end }}
 
     [nats]
     monitor_addr = "0.0.0.0:8222"

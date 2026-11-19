@@ -36,6 +36,28 @@ Headers are rendered into a Secret and reach the process as environment variable
 
 Two behaviours worth knowing before you go live. Authorization is asked on **every publish**, so it is cached — set `cacheTtl: 0s` if decisions must take effect instantly and accept a network round trip per message. And authentication **always fails closed** whatever `onError` says, because admitting a connection whose tenant is unknown would mean inventing an isolation boundary; `onError` governs authorization only.
 
+### Verifying a token instead
+
+`auth.mode: jwt` checks a signed token locally, so a reconnect storm of tens of thousands of devices touches no service at all. The trade is that revocation is only as fast as token expiry. A signature says who a client is, not what it may do, so most deployments keep `auth.http.authzUrl` set alongside it and let a policy service decide topics.
+
+```yaml
+auth:
+  mode: jwt
+  http:
+    authzUrl: https://policy.internal/mqtt/acl
+  jwt:
+    algorithms: [RS256]
+    keySecret: mast-jwt        # a Secret you create
+    publicKeyKey: jwt.pub      # or hmacSecretKey, never both
+    tenantClaim: tenant
+```
+
+The key never goes in values: the chart mounts the Secret you name at `/etc/mast/jwt` and points the broker at the one key in it. It refuses to render without `algorithms`, because accepting whatever algorithm a token asks for is how `alg: none` and RSA-to-HMAC confusion attacks work.
+
+## TLS
+
+Set `tls.secretName` to a Secret of type `kubernetes.io/tls`, such as one cert-manager writes. Every pod that terminates MQTT mounts it, and the MQTT listener (and the WebSocket one, when enabled) then speaks only TLS, on the same container port. Set `edge.service.mqttPort: 8883` if clients expect the conventional TLS port. The internal listener stays plain: it is for in-cluster peers, which it trusts completely anyway.
+
 ## Services
 
 Each shape gets two Services, and only one of them is meant to be reachable from outside.
@@ -66,9 +88,13 @@ The split exists because `edge.service.type: LoadBalancer` used to publish every
 | `edge.service.type` | `ClusterIP` | Applies to the client-facing Service only |
 | `edge.internalPort` | `0` | Unauthenticated listener, on the `-internal` Service only |
 | `auth.http.existingSecret` | `""` | Keys are `MAST__AUTH__HTTP__HEADERS__<NAME>`, not header names |
-| `auth.mode` | `static` | `static` or `http` |
+| `auth.mode` | `static` | `static`, `http` or `jwt` |
 | `auth.http.onError` | `deny` | Authorization only |
 | `auth.http.cacheTtl` | `1m` | `0s` disables caching |
+| `auth.jwt.algorithms` | `[]` | Required in `jwt` mode; no default on purpose |
+| `auth.jwt.keySecret` | `""` | A Secret you manage, mounted at `/etc/mast/jwt` |
+| `auth.jwt.hmacSecretKey`, `auth.jwt.publicKeyKey` | `""` | The key in that Secret; exactly one |
+| `tls.secretName` | `""` | A `kubernetes.io/tls` Secret; the MQTT listener then speaks only TLS |
 | `fabric.durableQoS` | `true` | Stores QoS 1 and 2 on a replicated stream before acknowledging, so they survive a node being cut off; `false` makes them at-most-once across nodes |
 | `fabric.durableMaxAge` | `5m` | How long a node can be cut off and still catch up |
 | `session.expiry` | `24h` | How long a persistent session is kept after DISCONNECT |

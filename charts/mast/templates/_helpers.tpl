@@ -123,8 +123,71 @@ on_error = {{ .Values.auth.http.onError | quote }}
 cache_ttl = {{ .Values.auth.http.cacheTtl | quote }}
 cache_size = {{ .Values.auth.http.cacheSize }}
 
+{{- if eq .Values.auth.mode "jwt" }}
+{{- $j := .Values.auth.jwt }}
+{{- if not $j.algorithms }}{{ fail "auth.jwt.algorithms is required in jwt mode" }}{{ end }}
+{{- if not $j.keySecret }}{{ fail "auth.jwt.keySecret is required in jwt mode" }}{{ end }}
+{{- if eq (empty $j.hmacSecretKey) (empty $j.publicKeyKey) }}{{ fail "set exactly one of auth.jwt.hmacSecretKey and auth.jwt.publicKeyKey" }}{{ end }}
+
+[auth.jwt]
+source = {{ $j.source | quote }}
+vendor_prefix = {{ $j.vendorPrefix }}
+algorithms = [{{ range $i, $a := $j.algorithms }}{{ if $i }}, {{ end }}{{ $a | quote }}{{ end }}]
+{{- if $j.hmacSecretKey }}
+hmac_secret_file = "/etc/mast/jwt/{{ $j.hmacSecretKey }}"
+{{- else }}
+public_key_file = "/etc/mast/jwt/{{ $j.publicKeyKey }}"
+{{- end }}
+tenant_claim = {{ $j.tenantClaim | quote }}
+superuser_claim = {{ $j.superuserClaim | quote }}
+issuer = {{ $j.issuer | quote }}
+audience = {{ $j.audience | quote }}
+{{- end }}
+
 [tenant]
 default = {{ .Values.auth.tenantDefault | quote }}
+{{- end }}
+
+{{/*
+Lines for the [mqtt] section when TLS is on. The kubernetes.io/tls Secret
+type fixes the key names, so they are not configurable.
+*/}}
+{{- define "mast.tlsConfig" -}}
+{{- if .Values.tls.secretName }}
+tls_cert = "/etc/mast/tls/tls.crt"
+tls_key = "/etc/mast/tls/tls.key"
+{{- end }}
+{{- end }}
+
+{{/*
+Mounts and volumes for the TLS and JWT Secrets, for every pod that
+terminates MQTT. Separate directories under /etc/mast, because the config
+ConfigMap is mounted at /etc/mast itself and a Secret cannot share it.
+*/}}
+{{- define "mast.secretMounts" -}}
+{{- if .Values.tls.secretName }}
+- name: tls
+  mountPath: /etc/mast/tls
+  readOnly: true
+{{- end }}
+{{- if eq .Values.auth.mode "jwt" }}
+- name: jwt
+  mountPath: /etc/mast/jwt
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{- define "mast.secretVolumes" -}}
+{{- if .Values.tls.secretName }}
+- name: tls
+  secret:
+    secretName: {{ .Values.tls.secretName }}
+{{- end }}
+{{- if eq .Values.auth.mode "jwt" }}
+- name: jwt
+  secret:
+    secretName: {{ .Values.auth.jwt.keySecret }}
+{{- end }}
 {{- end }}
 
 {{/*

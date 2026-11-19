@@ -1,0 +1,15 @@
+# JWT authentication with authorization still on a policy service, and TLS
+# on the MQTT listener, in the cluster shape. Renders the Secret mounts and
+# the [auth.jwt] block, which no other ci file reaches.
+tls:
+  secretName: mast-tls
+auth:
+  mode: jwt
+  http:
+    authzUrl: http://policy:8080/acl
+  jwt:
+    algorithms: [RS256]
+    keySecret: mast-jwt
+    publicKeyKey: jwt.pub
+    tenantClaim: tenant
+    superuserClaim: admin

@@ -111,10 +111,23 @@ edge:
   tolerations: []
   affinity: {}
 
+# TLS on the MQTT listener (and the WebSocket one, when enabled). Name a
+# Secret of type kubernetes.io/tls, such as cert-manager writes; it is
+# mounted into every pod that terminates MQTT, and the listener then speaks
+# only TLS on the same port. Empty serves plain MQTT. The internal listener
+# never uses TLS: it is meant for in-cluster peers that are trusted anyway.
+tls:
+  secretName: ""
+
 auth:
   # static: one tenant, everything allowed. Only appropriate where the
   #         deployment itself is the security boundary.
   # http:   ask your own service, posting the MQTT fields as JSON.
+  # jwt:    verify a signed token locally, so a reconnect storm touches no
+  #         service; revocation is only as fast as token expiry. Set
+  #         auth.http.authzUrl as well to keep topic decisions on a policy
+  #         service, since a signature says who a client is, not what it
+  #         may do.
   mode: static
 
   # Used in static mode.
@@ -155,6 +168,33 @@ auth:
     # MAST__AUTH__HTTP__HEADERS__X_API_KEY. A key without the prefix is
     # silently ignored.
     existingSecret: ""
+
+  jwt:
+    # The CONNECT field carrying the token. username, because many clients
+    # log passwords and none log usernames.
+    source: username
+    # Discard everything up to the first colon, for "<vendor>:<token>".
+    vendorPrefix: false
+    # Required in jwt mode, with deliberately no default: accepting whatever
+    # algorithm a token asks for is how "alg":"none" and RSA-to-HMAC
+    # confusion attacks work. The chart refuses to render without it.
+    algorithms: []
+    # The verification key comes from a Secret you manage, never from
+    # values, so it cannot end up in a values file in git. Name the Secret
+    # and the one key in it that holds either an HMAC secret or a PEM
+    # public key; setting both, or neither, fails the render.
+    keySecret: ""
+    hmacSecretKey: ""
+    publicKeyKey: ""
+    # The claim naming the tenant. Empty, or a token without it, falls back
+    # to auth.tenantDefault.
+    tenantClaim: ""
+    # A boolean claim that bypasses authorization, as EMQX's is_superuser
+    # does.
+    superuserClaim: ""
+    # Checked against the token when set.
+    issuer: ""
+    audience: ""
 
 # How messages cross between nodes. QoS 1 and 2 are stored on one replicated
 # JetStream stream before they are acknowledged, and every node reads it

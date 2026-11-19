@@ -98,10 +98,12 @@ spec:
             - name: config
               mountPath: /etc/mast
               readOnly: true
+            {{- with (include "mast.secretMounts" . | trim) }}{{ . | nindent 12 }}{{ end }}
       volumes:
         - name: config
           configMap:
             name: {{ include "mast.edge.fullname" . }}
+        {{- with (include "mast.secretVolumes" . | trim) }}{{ . | nindent 8 }}{{ end }}
       {{- with .Values.edge.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
