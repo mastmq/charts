@@ -1,0 +1,27 @@
+{{- /* default dict: helm upgrade --reuse-values from a chart before 0.5.0
+carries no metrics.grafanaDashboard at all, and a nil map stops the render. */}}
+{{- $gd := .Values.metrics.grafanaDashboard | default dict }}
+{{- if $gd.enabled }}
+{{- if not .Values.metrics.enabled }}
+{{- fail "metrics.grafanaDashboard.enabled needs metrics.enabled: without the metrics port on the internal Service nothing is scraped for it to show" }}
+{{- end }}
+# The dashboard is a file in the chart rather than a template, so it can be
+# edited in Grafana, exported and dropped back in unchanged. Its queries
+# filter on namespace and pod, which a ServiceMonitor scrape adds.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mast.fullname" . }}-dashboard
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    {{- with $gd.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $gd.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  mast.json: |-
+    {{- .Files.Get "dashboards/mast.json" | nindent 4 }}
+{{- end }}

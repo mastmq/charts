@@ -70,9 +70,14 @@ spec:
               containerPort: 8222
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
+          # mast's /readyz, on the metrics port where mast's own server
+          # answers it. On an all-in-one node it is nats-server's JetStream
+          # health check, so the pod is not Ready while the store is still
+          # restoring, which a TCP check on the MQTT port could not see.
           readinessProbe:
-            tcpSocket:
-              port: mqtt
+            httpGet:
+              path: /readyz
+              port: metrics
             initialDelaySeconds: 3
             periodSeconds: 10
           resources:

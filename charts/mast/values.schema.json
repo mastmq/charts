@@ -1,0 +1,694 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "mast",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "cluster",
+        "standalone"
+      ],
+      "description": "cluster: core StatefulSet plus edge Deployment. standalone: one all-in-one pod."
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "description": "Defaults to the chart's appVersion. Quote it: an unquoted 1.0 is a number."
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "nameOverride": {
+      "type": "string"
+    },
+    "fullnameOverride": {
+      "type": "string"
+    },
+    "extraEnv": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "warning",
+            "error"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "json",
+            "text"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "core": {
+      "type": "object",
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "description": "Core StatefulSet size.",
+          "minimum": 1
+        },
+        "jetstreamReplicas": {
+          "type": "integer",
+          "description": "KV bucket replication factor; at most core.replicas, and JetStream allows at most 5.",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "podDisruptionBudget": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "maxUnavailable": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9]+%$"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+            },
+            "storageClassName": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "requests": {
+              "type": "object"
+            },
+            "limits": {
+              "type": "object"
+            },
+            "claims": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "affinity": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "ClusterIP",
+                "NodePort",
+                "LoadBalancer"
+              ]
+            },
+            "mqttPort": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "internalPort": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Unauthenticated listener; 0 disables it."
+        },
+        "wsPort": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "MQTT over WebSocket; 0 disables it."
+        },
+        "maxWritesPending": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "autoscaling": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "minReplicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxReplicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "targetCPUUtilizationPercentage": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "podDisruptionBudget": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "maxUnavailable": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9]+%$"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "requests": {
+              "type": "object"
+            },
+            "limits": {
+              "type": "object"
+            },
+            "claims": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "affinity": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tls": {
+      "type": "object",
+      "properties": {
+        "secretName": {
+          "type": "string",
+          "description": "A kubernetes.io/tls Secret; empty serves plain MQTT."
+        }
+      },
+      "additionalProperties": false
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "static",
+            "http",
+            "jwt"
+          ]
+        },
+        "tenantDefault": {
+          "type": "string",
+          "minLength": 1
+        },
+        "http": {
+          "type": "object",
+          "properties": {
+            "wire": {
+              "type": "string",
+              "enum": [
+                "mast",
+                "emqx"
+              ]
+            },
+            "authnUrl": {
+              "type": "string"
+            },
+            "authzUrl": {
+              "type": "string"
+            },
+            "timeout": {
+              "type": "string",
+              "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+              "description": "A Go duration, such as 30s, 5m or 1h30m."
+            },
+            "onError": {
+              "type": "string",
+              "enum": [
+                "deny",
+                "allow"
+              ],
+              "description": "Authorization only; authentication always fails closed."
+            },
+            "cacheTtl": {
+              "type": "string",
+              "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+              "description": "A Go duration, such as 30s, 5m or 1h30m."
+            },
+            "cacheSize": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "existingSecret": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "jwt": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "username",
+                "password"
+              ]
+            },
+            "vendorPrefix": {
+              "type": "boolean"
+            },
+            "algorithms": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "HS256",
+                  "HS384",
+                  "HS512",
+                  "RS256",
+                  "RS384",
+                  "RS512",
+                  "PS256",
+                  "PS384",
+                  "PS512",
+                  "ES256",
+                  "ES384",
+                  "ES512",
+                  "EdDSA"
+                ]
+              },
+              "uniqueItems": true
+            },
+            "keySecret": {
+              "type": "string"
+            },
+            "hmacSecretKey": {
+              "type": "string"
+            },
+            "publicKeyKey": {
+              "type": "string"
+            },
+            "tenantClaim": {
+              "type": "string"
+            },
+            "superuserClaim": {
+              "type": "string"
+            },
+            "issuer": {
+              "type": "string"
+            },
+            "audience": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "http"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "http": {
+                "properties": {
+                  "authnUrl": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "authnUrl"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "jwt"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "jwt": {
+                "properties": {
+                  "algorithms": {
+                    "minItems": 1
+                  },
+                  "keySecret": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "algorithms",
+                  "keySecret"
+                ],
+                "oneOf": [
+                  {
+                    "properties": {
+                      "hmacSecretKey": {
+                        "minLength": 1
+                      },
+                      "publicKeyKey": {
+                        "maxLength": 0
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "publicKeyKey": {
+                        "minLength": 1
+                      },
+                      "hmacSecretKey": {
+                        "maxLength": 0
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "fabric": {
+      "type": "object",
+      "properties": {
+        "durableQoS": {
+          "type": "boolean"
+        },
+        "durableMaxAge": {
+          "type": "string",
+          "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "description": "A Go duration, such as 30s, 5m or 1h30m."
+        }
+      },
+      "additionalProperties": false
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "expiry": {
+          "type": "string",
+          "pattern": "^(0|([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)$",
+          "description": "A Go duration, such as 30s, 5m or 1h30m."
+        }
+      },
+      "additionalProperties": false
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "internalFrom": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Publishes the metrics port on the internal Service. The pod serves it regardless, since the readiness probe uses it."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "serviceMonitor": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval": {
+              "type": "string",
+              "pattern": "^([0-9]+(ms|s|m|h|d|w|y))+$",
+              "description": "A Prometheus duration, such as 30s or 1m."
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "grafanaDashboard": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "prometheusRule": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "queuerAwaySessionsThreshold": {
+              "type": "integer",
+              "description": "0 turns the alert off.",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "workloadAnnotations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "podAnnotations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "podLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "podSecurityContext": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "securityContext": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  }
+}

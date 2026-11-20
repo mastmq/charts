@@ -1,0 +1,15 @@
+# The monitoring add-ons in the cluster shape: the ServiceMonitor, the
+# Grafana dashboard ConfigMap and the PrometheusRule with every optional
+# alert on, so a rule that only renders with the threshold at zero fails CI.
+metrics:
+  serviceMonitor:
+    enabled: true
+  grafanaDashboard:
+    enabled: true
+    annotations:
+      grafana_folder: mast
+  prometheusRule:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+    queuerAwaySessionsThreshold: 10000

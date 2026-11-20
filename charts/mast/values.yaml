@@ -227,6 +227,10 @@ networkPolicy:
   internalFrom: []
 
 metrics:
+  # Publishes the metrics port on the internal Service, and with it what the
+  # ServiceMonitor, the dashboard and the alerts read. The pod serves the
+  # port either way: it is mast's own server, which also answers /readyz for
+  # the readiness probe and /debug/pprof.
   enabled: true
   port: 9090
   # Requires the Prometheus operator CRDs.
@@ -234,6 +238,32 @@ metrics:
     enabled: false
     interval: 30s
     labels: {}
+  # A Grafana dashboard in a ConfigMap, for the Grafana sidecar that loads
+  # every ConfigMap carrying its label (kube-prometheus-stack runs one). Off
+  # by default because without that sidecar it is a ConfigMap nobody reads.
+  # Its queries filter on the namespace and pod labels that a ServiceMonitor
+  # scrape adds.
+  grafanaDashboard:
+    enabled: false
+    # The sidecar's label. grafana_dashboard: "1" is its default.
+    labels:
+      grafana_dashboard: "1"
+    # grafana_folder here puts it in a folder, if the sidecar is set to
+    # read folders from an annotation.
+    annotations: {}
+  # Alerts for the Prometheus operator. Off by default because it needs the
+  # PrometheusRule CRD. The mast rules read what the ServiceMonitor scrapes;
+  # the readiness rules read kube-state-metrics, which is the only place a
+  # pod that is not serving, rather than a number that went wrong, shows up.
+  prometheusRule:
+    enabled: false
+    # Labels your Prometheus selects rules by, e.g. release: <stack>.
+    labels: {}
+    # How many sessions the queuer may keep for absent clients before it is
+    # worth a look. They are devices that went away with a persistent
+    # session and have not come back, so the right number is a fraction of
+    # your fleet; 0 turns the alert off.
+    queuerAwaySessionsThreshold: 0
 
 serviceAccount:
   create: true

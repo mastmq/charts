@@ -3,11 +3,13 @@ apiVersion: v2
 name: mast
 description: Multi-tenant MQTT broker built on core NATS
 type: application
-version: 0.4.0
-appVersion: "0.3.1"
-home: https://github.com/mastmq/mast
+version: 0.5.0
+appVersion: "0.3.2"
+home: https://mastmq.github.io/
+icon: https://raw.githubusercontent.com/mastmq/.github/main/assets/mark-256.png
 sources:
   - https://github.com/mastmq/mast
+  - https://github.com/mastmq/charts
 keywords:
   - mqtt
   - nats
@@ -16,3 +18,39 @@ keywords:
 maintainers:
   - name: mastmq
     url: https://github.com/mastmq
+# Read by Artifact Hub. artifacthub.io/images must name the image appVersion
+# deploys, and artifacthub.io/changes describes this chart version only, so
+# both change on every release.
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: streaming-messaging
+  artifacthub.io/operator: "false"
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/links: |
+    - name: Website
+      url: https://mastmq.github.io/
+    - name: Broker source
+      url: https://github.com/mastmq/mast
+    - name: Chart source
+      url: https://github.com/mastmq/charts
+    - name: Operational guides
+      url: https://github.com/mastmq/docs
+  artifacthub.io/images: |
+    - name: mast
+      image: ghcr.io/mastmq/mast:0.3.2
+      platforms:
+        - linux/amd64
+        - linux/arm64
+  artifacthub.io/changes: |
+    - kind: changed
+      description: Deploy mast 0.3.2 by default
+    - kind: changed
+      description: Readiness probes on edge, core and standalone use mast's /readyz on the metrics port; an edge is not Ready while its leaf link to the core is down
+    - kind: added
+      description: values.schema.json, so a wrong type, an unknown key or an incomplete http or jwt auth setup fails at install time
+    - kind: added
+      description: Grafana dashboard ConfigMap behind metrics.grafanaDashboard.enabled
+    - kind: added
+      description: PrometheusRule with mast alerts behind metrics.prometheusRule.enabled
+    - kind: added
+      description: Artifact Hub metadata

@@ -81,9 +81,18 @@ spec:
               containerPort: 8222
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
+          # Readiness is mast's /readyz, which on an edge is the leaf link
+          # to the core. A TCP check on the MQTT port passed while that link
+          # was down, so the Service kept handing devices to an edge that
+          # could carry nothing across the cluster. It is on the metrics port
+          # because mast's own server answers it; the NATS monitor has no
+          # /readyz. Liveness stays on /healthz: a dead core is not fixed by
+          # restarting every edge, and a liveness check on the leaf link
+          # would do exactly that.
           readinessProbe:
-            tcpSocket:
-              port: mqtt
+            httpGet:
+              path: /readyz
+              port: metrics
             initialDelaySeconds: 3
             periodSeconds: 10
           livenessProbe:

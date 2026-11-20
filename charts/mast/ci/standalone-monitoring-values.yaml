@@ -1,0 +1,12 @@
+# The PrometheusRule and dashboard in the standalone shape, whose Service
+# names and pod names differ from the cluster's and whose rules differ too.
+mode: standalone
+core:
+  persistence:
+    enabled: false
+metrics:
+  grafanaDashboard:
+    enabled: true
+  prometheusRule:
+    enabled: true
+    queuerAwaySessionsThreshold: 500

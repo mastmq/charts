@@ -216,3 +216,31 @@ durable_max_age = {{ .Values.fabric.durableMaxAge | quote }}
 [session]
 expiry = {{ .Values.session.expiry | quote }}
 {{- end }}
+
+{{/*
+PromQL label matchers for the series this release's ServiceMonitor scrapes.
+The operator labels every scraped series with the namespace and the Service
+it came through, so this matches exactly this release's pods and not another
+release of the chart in the same namespace. In cluster mode the core and the
+edges come through different Services.
+*/}}
+{{- define "mast.promSelector" -}}
+{{- if eq .Values.mode "standalone" -}}
+namespace="{{ .Release.Namespace }}", service="{{ include "mast.internal.fullname" . }}"
+{{- else -}}
+namespace="{{ .Release.Namespace }}", service=~"{{ include "mast.core.fullname" . }}|{{ include "mast.internal.fullname" . }}"
+{{- end -}}
+{{- end }}
+
+{{/*
+The Service that carries the queuer's metrics: the cores in a cluster, the
+one node standalone. Edges register mast_queuer_away_sessions too and always
+report zero, so a rule comparing queuers must not see them.
+*/}}
+{{- define "mast.promQueuerSelector" -}}
+{{- if eq .Values.mode "standalone" -}}
+namespace="{{ .Release.Namespace }}", service="{{ include "mast.internal.fullname" . }}"
+{{- else -}}
+namespace="{{ .Release.Namespace }}", service="{{ include "mast.core.fullname" . }}"
+{{- end -}}
+{{- end }}

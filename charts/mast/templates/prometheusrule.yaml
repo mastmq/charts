@@ -1,0 +1,155 @@
+{{- /* default dict: helm upgrade --reuse-values from a chart before 0.5.0
+carries no metrics.prometheusRule at all, and a nil map stops the render. */}}
+{{- $pr := .Values.metrics.prometheusRule | default dict }}
+{{- if $pr.enabled }}
+{{- if not .Values.metrics.enabled }}
+{{- fail "metrics.prometheusRule.enabled needs metrics.enabled: the mast alerts read what the metrics port serves, and would sit silent without it" }}
+{{- end }}
+{{- $sel := include "mast.promSelector" . }}
+{{- $queuer := include "mast.promQueuerSelector" . }}
+{{- $ns := .Release.Namespace }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "mast.fullname" . }}
+  labels:
+    {{- include "mast.labels" . | nindent 4 }}
+    {{- with $pr.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    # Whether the pods are there and serving. These read kube-state-metrics
+    # rather than mast, because a pod that is not serving often has no
+    # metrics to say so, and up only knows whether a scrape answered.
+    - name: mast.availability
+      rules:
+        {{- if eq .Values.mode "cluster" }}
+        # An edge's /readyz fails while its leaf link to the core is down,
+        # so a not-ready edge is, past its first seconds, an edge that
+        # cannot reach the core. It keeps its devices connected and carries
+        # nothing across the cluster, and the Service has stopped sending it
+        # new ones. The probe event on the pod carries /readyz's reason.
+        - alert: MastEdgeCannotReachCore
+          expr: |
+            max by (namespace, pod) (
+              kube_pod_status_ready{namespace="{{ $ns }}", pod=~"{{ include "mast.edge.fullname" . }}-[a-z0-9]+-[a-z0-9]+", condition="false"}
+            ) == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: {{ `mast edge {{ $labels.pod }} is not ready` }}
+            description: {{ `{{ $labels.pod }} has failed /readyz for five minutes. On an edge that means its leaf connection to the core is down; kubectl describe pod shows the reason /readyz gave.` | quote }}
+        - alert: MastCoreNotReady
+          expr: |
+            max by (namespace, pod) (
+              kube_pod_status_ready{namespace="{{ $ns }}", pod=~"{{ include "mast.core.fullname" . }}-[0-9]+", condition="false"}
+            ) == 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: {{ `mast core {{ $labels.pod }} is not ready` }}
+            description: {{ `{{ $labels.pod }} has failed nats-server's JetStream health check for ten minutes: no meta leader, or streams not current. Two of three cores in this state is lost quorum, and every KV write stalls.` | quote }}
+        {{- else }}
+        - alert: MastNotReady
+          expr: |
+            max by (namespace, pod) (
+              kube_pod_status_ready{namespace="{{ $ns }}", pod=~"{{ include "mast.fullname" . }}-[0-9]+", condition="false"}
+            ) == 1
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: {{ `mast {{ $labels.pod }} is not ready` }}
+            description: {{ `{{ $labels.pod }} has failed /readyz for ten minutes, which on a standalone node is nats-server's JetStream health check.` | quote }}
+        {{- end }}
+        - alert: MastMetricsDown
+          expr: up{ {{- $sel -}} } == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{ `mast {{ $labels.pod }} does not answer scrapes` }}
+            description: {{ `Prometheus has not scraped {{ $labels.pod }} for five minutes. The process is down or wedged, and every other mast alert is blind for it.` | quote }}
+
+    # What the broker itself counts. Each of these is a message that was
+    # refused or lost, or a reader that stopped, none of which a pod status
+    # shows.
+    - name: mast.delivery
+      rules:
+        {{- if .Values.fabric.durableQoS }}
+        # Each failure is a QoS 1 or 2 publish the broker refused rather
+        # than acknowledged, so a publisher is retrying. It almost always
+        # means the core's JetStream would not store: quorum lost, or the
+        # stream full.
+        - alert: MastDurablePublishFailures
+          expr: sum by (namespace, pod) (increase(mast_durable_publish_failures_total{ {{- $sel -}} }[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: {{ `mast {{ $labels.pod }} is refusing QoS 1 and 2 publishes` }}
+            description: {{ `{{ $value | humanize }} durable publishes failed on {{ $labels.pod }} in five minutes. The durable stream on the core would not store them, so publishers were told to retry.` | quote }}
+        # Every reader of the durable stream on every node climbs at the
+        # stream's rate. One standing still while another moves has lost its
+        # consumer: a bridge that stopped delivers nothing to that node's
+        # subscribers, a queuer that stopped keeps nothing for absent ones.
+        - alert: MastDurableReaderStalled
+          expr: |
+            (sum by (namespace, pod, reader) (rate(mast_durable_read_total{ {{- $sel -}} }[10m])) == 0)
+            and on (namespace)
+            (max by (namespace) (rate(mast_durable_read_total{ {{- $sel -}} }[10m])) > 0)
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: {{ `mast {{ $labels.reader }} on {{ $labels.pod }} stopped reading the durable stream` }}
+            description: {{ `The {{ $labels.reader }} reader on {{ $labels.pod }} has read nothing for twenty minutes while other readers kept reading. It has lost its consumer; restarting the pod recreates it.` | quote }}
+        {{- end }}
+        # Any value above zero is messages this node had accepted and then
+        # discarded, because a NATS subscription's pending queue overflowed.
+        # No other metric shows the loss.
+        - alert: MastSlowConsumer
+          expr: sum by (namespace, pod) (increase(mast_nats_slow_consumers_total{ {{- $sel -}} }[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: {{ `mast {{ $labels.pod }} dropped messages to a slow consumer` }}
+            description: {{ `{{ $labels.pod }} discarded accepted messages because a NATS subscription fell behind. The node is overloaded for its fan-out.` | quote }}
+
+    {{- if .Values.fabric.durableQoS }}
+    # The queuer keeps messages for persistent sessions whose client is
+    # away. It runs on every core (or on the one standalone node).
+    - name: mast.queuer
+      rules:
+        {{- if eq .Values.mode "cluster" }}
+        # Every core's queuer reads the same stream and the same session
+        # records, so they should agree on how many sessions are away. One
+        # that disagrees for half an hour has missed records, and a client
+        # that reconnects through it finds a different queue.
+        - alert: MastQueuersDisagree
+          expr: |
+            (max by (namespace) (mast_queuer_away_sessions{ {{- $queuer -}} })
+              - min by (namespace) (mast_queuer_away_sessions{ {{- $queuer -}} })) > 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: mast cores disagree on how many sessions are away
+            description: {{ `The cores' queuers have reported different away-session counts for thirty minutes (spread {{ $value }}). They read the same stream and should match.` | quote }}
+        {{- end }}
+        {{- with (int $pr.queuerAwaySessionsThreshold) }}
+        # A count that climbs and never falls is devices that never came
+        # back. It is a fleet problem long before it is a storage one.
+        - alert: MastQueuerBacklog
+          expr: max by (namespace) (mast_queuer_away_sessions{ {{- $queuer -}} }) > {{ . }}
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: mast is keeping messages for many absent sessions
+            description: {{ printf "The queuer has kept messages for more than %d absent sessions (metrics.prometheusRule.queuerAwaySessionsThreshold) for an hour; now {{ $value }}." . | quote }}
+        {{- end }}
+    {{- end }}
+{{- end }}

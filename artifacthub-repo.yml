@@ -1,0 +1,9 @@
+# Artifact Hub repository metadata for oci://ghcr.io/mastmq/charts/mast.
+#
+# Artifact Hub reads this from an OCI artifact tagged artifacthub.io next to
+# the chart, not from git. The release workflow pushes it there, but only
+# once repositoryID is set: the ID is assigned when the repository is added
+# on artifacthub.io, and the file does nothing for the listing before that.
+# With it, Artifact Hub marks the publisher as verified.
+#
+# repositoryID: <the UUID Artifact Hub shows in the repository's settings>

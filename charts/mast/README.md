@@ -99,9 +99,41 @@ The split exists because `edge.service.type: LoadBalancer` used to publish every
 | `fabric.durableMaxAge` | `5m` | How long a node can be cut off and still catch up |
 | `session.expiry` | `24h` | How long a persistent session is kept after DISCONNECT |
 | `networkPolicy.enabled` | `false` | MQTT from anywhere; internal listener, metrics and monitor from this namespace and `networkPolicy.internalFrom` only |
+| `metrics.enabled` | `true` | Publishes the metrics port on the `-internal` Service. The pod serves it either way, because readiness uses it |
 | `metrics.serviceMonitor.enabled` | `false` | Needs the Prometheus operator CRDs. Scrapes edges, standalone and cores |
+| `metrics.grafanaDashboard.enabled` | `false` | A ConfigMap for the Grafana sidecar; see [Monitoring](#monitoring) |
+| `metrics.grafanaDashboard.labels` | `grafana_dashboard: "1"` | The label the sidecar watches for |
+| `metrics.grafanaDashboard.annotations` | `{}` | e.g. `grafana_folder` |
+| `metrics.prometheusRule.enabled` | `false` | Needs the Prometheus operator CRDs; see [Monitoring](#monitoring) |
+| `metrics.prometheusRule.labels` | `{}` | Whatever your Prometheus selects rules by, e.g. `release: kube-prometheus-stack` |
+| `metrics.prometheusRule.queuerAwaySessionsThreshold` | `0` | Alert when the queuer keeps more absent sessions than this for an hour; `0` turns it off |
 
-Run `helm show values oci://ghcr.io/mastmq/charts/mast` for the full list.
+Run `helm show values oci://ghcr.io/mastmq/charts/mast` for the full list, each key with a comment saying why it exists.
+
+The chart ships a `values.schema.json`, so Helm checks values before it renders anything. A wrong type (`replicas: three`, an unquoted `image.tag: 1.0`), a misspelt key (`edge.replica`), a value outside an enum (`auth.mode: ldap`) and the auth combinations the broker refuses at startup (`auth.mode: http` without `authnUrl`; `auth.mode: jwt` without `algorithms`, `keySecret` and exactly one of `hmacSecretKey` and `publicKeyKey`) all fail `helm install` with the path of the bad value, instead of rendering a pod that crash-loops. Keys under Kubernetes objects (`resources`, `affinity`, `podSecurityContext`, …) are not checked beyond their type, and `podSecurityContext` keys may be `null` on purpose.
+
+## Monitoring
+
+Every pod serves `/metrics`, `/healthz`, `/readyz` and `/debug/pprof` on `metrics.port`. Three add-ons build on it, all off by default because each needs something the cluster may not have.
+
+`metrics.serviceMonitor.enabled` scrapes every role through the Prometheus operator. The other two assume this scrape, or one that adds the same `namespace`, `service` and `pod` labels.
+
+`metrics.grafanaDashboard.enabled` renders a ConfigMap holding a Grafana dashboard, labelled for the Grafana sidecar (kube-prometheus-stack runs one). It shows connections, messages and auth failures by tenant, the durable stream's readers and publish failures, offline queueing and the queuer, the NATS client's slow consumers and reconnects, and the process. The JSON is `dashboards/mast.json` in the chart, so it can also be imported by hand.
+
+`metrics.prometheusRule.enabled` renders a PrometheusRule:
+
+| Alert | Fires when |
+| --- | --- |
+| `MastEdgeCannotReachCore` | An edge has been not-Ready for 5 minutes. `/readyz` on an edge fails while its leaf link to the core is down |
+| `MastCoreNotReady` / `MastNotReady` | A core, or the standalone pod, has failed the JetStream health check for 10 minutes |
+| `MastMetricsDown` | A pod has not answered a scrape for 5 minutes |
+| `MastDurablePublishFailures` | Any QoS 1 or 2 publish was refused because the durable stream would not store it |
+| `MastDurableReaderStalled` | One reader of the durable stream (a bridge or a queuer) read nothing for 20 minutes while others did |
+| `MastSlowConsumer` | A node discarded accepted messages because a NATS subscription overflowed |
+| `MastQueuersDisagree` | The cores' queuers report different numbers of away sessions for 30 minutes (cluster only) |
+| `MastQueuerBacklog` | The queuer keeps more absent sessions than `queuerAwaySessionsThreshold` for an hour (when set) |
+
+The readiness alerts read `kube_pod_status_ready` from kube-state-metrics rather than anything mast exports, because a pod that cannot serve often cannot say so either. The durable and queuer alerts are left out when `fabric.durableQoS` is off, since nothing then reads the stream.
 
 ## Network policy
 
@@ -117,7 +149,9 @@ Budget edge memory at roughly 40–80KB per TLS connection plus headroom, and re
 
 Every pod names its embedded NATS server after itself, through `MAST__NATS__NAME` from the downward API. Without it every pod in a role answers to the same `mast-core` or `mast-edge`, and NATS uses that name to tell servers apart: a core closes a route from a peer carrying its own name, and a leaf connection under a name already attached evicts the one before it, so edges knock each other off in turn. Setting `MAST__NATS__NAME` in `extraEnv` replaces the injected value.
 
-The core liveness probe asks `/healthz?js-server-only=true`, which checks only that the server accepts connections; readiness keeps the full `/healthz`, which also checks JetStream. A peer that is catching up, or a tier that has lost quorum, fails the full check exactly when it most needs to be left alone, so using it for liveness had the kubelet restart the peers that were recovering. A startup probe allows up to ten minutes for a large store to restore before liveness applies.
+Readiness on every role is mast's `/readyz`, on the metrics port; the NATS monitor on 8222 has no `/readyz`. On an edge it fails while the leaf link to the core is down, so the Service stops sending devices to an edge that could carry nothing across the cluster; the TCP check it replaces passed in exactly that state. Liveness on an edge stays the monitor's `/healthz`, because restarting every edge does not bring a core back. On a core and on the standalone pod, `/readyz` is nats-server's own JetStream health check: a meta leader, and streams current.
+
+The core liveness probe asks `/healthz?js-server-only=true` on the monitor, which checks only that the server accepts connections; readiness keeps the full JetStream check through `/readyz`. A peer that is catching up, or a tier that has lost quorum, fails the full check exactly when it most needs to be left alone, so using it for liveness had the kubelet restart the peers that were recovering. A startup probe allows up to ten minutes for a large store to restore before liveness applies.
 
 To confirm the edges actually attached to the core:
 

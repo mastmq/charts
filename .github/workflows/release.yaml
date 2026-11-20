@@ -32,3 +32,26 @@ jobs:
         run: |
           helm package charts/mast -d dist
           helm push dist/mast-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+
+      # Artifact Hub reads repository metadata from an artifact tagged
+      # artifacthub.io beside the chart. It means nothing until the
+      # repository is registered there and its ID is in the file, so the
+      # push waits for that rather than publishing an empty claim.
+      - name: check for an Artifact Hub repository ID
+        id: artifacthub
+        run: |
+          if grep -q '^repositoryID:' artifacthub-repo.yml; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: oras-project/setup-oras@v2
+        if: steps.artifacthub.outputs.push == 'true'
+
+      - name: push Artifact Hub metadata
+        if: steps.artifacthub.outputs.push == 'true'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | oras login ghcr.io -u ${{ github.actor }} --password-stdin
+          oras push ghcr.io/${{ github.repository_owner }}/charts/mast:artifacthub.io \
+            --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
+            artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
