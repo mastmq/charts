@@ -95,6 +95,49 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+The [tracing] block, for the roles that have an MQTT side to trace. Rendered
+only when tracing is on, so that a chart upgrade with it off leaves the
+ConfigMap, and with it every edge, alone. An empty key is left out rather
+than written as "", which mast would read the same way, so that the file
+says only what was chosen.
+*/}}
+{{- define "mast.tracingConfig" -}}
+{{- with .Values.tracing }}
+{{- if .enabled }}
+[tracing]
+enabled = true
+{{- with .endpoint }}
+endpoint = {{ . | quote }}
+{{- end }}
+{{- with .sampler }}
+sampler = {{ . | quote }}
+{{- end }}
+{{- with .samplerArg }}
+sampler_arg = {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+envFrom for the roles with an MQTT side: the auth header Secret in http mode,
+and the OTEL_* Secret when tracing is on. Both are optional, as a missing
+Secret should cost the feature it configures, not the pod.
+*/}}
+{{- define "mast.envFrom" -}}
+{{- if eq .Values.auth.mode "http" }}
+- secretRef:
+    name: {{ include "mast.authSecretName" . }}
+    optional: true
+{{- end }}
+{{- if and .Values.tracing.enabled .Values.tracing.existingSecret }}
+- secretRef:
+    name: {{ .Values.tracing.existingSecret }}
+    optional: true
+{{- end }}
+{{- end }}
+
+{{/*
 Secret holding the auth headers, whether we render it or the user supplies it.
 */}}
 {{- define "mast.authSecretName" -}}

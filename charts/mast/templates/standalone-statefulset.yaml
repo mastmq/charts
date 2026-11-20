@@ -47,11 +47,9 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if eq .Values.auth.mode "http" }}
+          {{- with include "mast.envFrom" . }}
           envFrom:
-            - secretRef:
-                name: {{ include "mast.authSecretName" . }}
-                optional: true
+            {{- . | trim | nindent 12 }}
           {{- end }}
           env:
             {{- include "mast.env" . | nindent 12 }}

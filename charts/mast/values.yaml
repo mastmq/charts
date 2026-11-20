@@ -208,6 +208,34 @@ fabric:
   # and still catch up.
   durableMaxAge: 5m
 
+# OpenTelemetry traces of the message path, exported over OTLP/HTTP. Off by
+# default because off costs the broker nothing, and on is a per-message cost
+# and a collector to run. Only edges and the standalone pod trace: a core
+# has no MQTT side and builds no tracer. The [tracing] block is rendered
+# only when this is on, so turning the chart over to a version with it does
+# not change the ConfigMap and roll every edge, which reconnects the fleet.
+# Needs a mast that reads [tracing] (after v0.3.2); an older one ignores it.
+tracing:
+  enabled: false
+  # The collector, e.g. http://otel-collector.monitoring:4318. Empty defers
+  # to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT
+  # from existingSecret or extraEnv, then http://localhost:4318.
+  endpoint: ""
+  # An OTEL_TRACES_SAMPLER name. parentbased_traceidratio with a small
+  # samplerArg is the one for a fleet: one decision per message at its
+  # ingress, followed by every node that delivers it. Empty defers to
+  # OTEL_TRACES_SAMPLER, then parentbased_always_on, which traces every
+  # message. A client's sampled flag never overrides it.
+  sampler: ""
+  # The ratio, as a string because OTEL_TRACES_SAMPLER_ARG is one, e.g.
+  # "0.01". Empty defers to OTEL_TRACES_SAMPLER_ARG, then 1.
+  samplerArg: ""
+  # A Secret you manage whose keys are OTEL_* variables, loaded into the
+  # edge and standalone containers. It exists for
+  # OTEL_EXPORTER_OTLP_HEADERS: a collector's API key belongs in a Secret,
+  # never in values or the ConfigMap.
+  existingSecret: ""
+
 session:
   # How long a disconnected persistent session and its queued QoS 1/2
   # messages are kept, counted from DISCONNECT.

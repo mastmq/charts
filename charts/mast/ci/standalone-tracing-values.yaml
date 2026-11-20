@@ -1,0 +1,5 @@
+# Tracing on in the standalone shape, with only enabled set: every other key
+# defers to the environment and must be left out of the TOML.
+mode: standalone
+tracing:
+  enabled: true

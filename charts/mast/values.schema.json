@@ -540,6 +540,42 @@
       },
       "additionalProperties": false
     },
+    "tracing": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^(|https?://.+)$",
+          "description": "The OTLP/HTTP collector URL. Empty defers to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, then OTEL_EXPORTER_OTLP_ENDPOINT."
+        },
+        "sampler": {
+          "type": "string",
+          "enum": [
+            "",
+            "always_on",
+            "always_off",
+            "traceidratio",
+            "parentbased_always_on",
+            "parentbased_always_off",
+            "parentbased_traceidratio"
+          ],
+          "description": "An OTEL_TRACES_SAMPLER name. Empty defers to that variable."
+        },
+        "samplerArg": {
+          "type": "string",
+          "pattern": "^(|0(\\.[0-9]+)?|1(\\.0+)?|\\.[0-9]+)$",
+          "description": "A ratio between 0 and 1, as a string, e.g. \"0.01\". Empty defers to OTEL_TRACES_SAMPLER_ARG."
+        },
+        "existingSecret": {
+          "type": "string",
+          "description": "A Secret whose keys are OTEL_* variables, such as OTEL_EXPORTER_OTLP_HEADERS."
+        }
+      },
+      "additionalProperties": false
+    },
     "session": {
       "type": "object",
       "properties": {
