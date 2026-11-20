@@ -1,0 +1,14 @@
+# Tracing on in the cluster shape, with every key set and the OTEL_* Secret,
+# so the [tracing] block and the extra envFrom entry render and validate.
+# http auth is on too, because the edge then needs both Secrets in one
+# envFrom list.
+tracing:
+  enabled: true
+  endpoint: http://otel-collector.monitoring:4318
+  sampler: parentbased_traceidratio
+  samplerArg: "0.01"
+  existingSecret: mast-otel
+auth:
+  mode: http
+  http:
+    authnUrl: http://auth.example/authn

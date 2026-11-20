@@ -38,4 +38,8 @@ data:
 
     [obs]
     addr = "0.0.0.0:{{ .Values.metrics.port }}"
+    {{- with include "mast.tracingConfig" . }}
+
+    {{ . | nindent 4 | trim }}
+    {{- end }}
 {{- end }}

@@ -97,6 +97,10 @@ The split exists because `edge.service.type: LoadBalancer` used to publish every
 | `tls.secretName` | `""` | A `kubernetes.io/tls` Secret; the MQTT listener then speaks only TLS |
 | `fabric.durableQoS` | `true` | Stores QoS 1 and 2 on a replicated stream before acknowledging, so they survive a node being cut off; `false` makes them at-most-once across nodes |
 | `fabric.durableMaxAge` | `5m` | How long a node can be cut off and still catch up |
+| `tracing.enabled` | `false` | OpenTelemetry traces of the message path, on edges and the standalone pod; see [Tracing](#tracing) |
+| `tracing.endpoint` | `""` | The OTLP/HTTP collector, e.g. `http://otel-collector.monitoring:4318` |
+| `tracing.sampler`, `tracing.samplerArg` | `""` | An `OTEL_TRACES_SAMPLER` name and its ratio as a string; each empty one defers to its variable |
+| `tracing.existingSecret` | `""` | A Secret you manage whose keys are `OTEL_*` variables, for `OTEL_EXPORTER_OTLP_HEADERS` |
 | `session.expiry` | `24h` | How long a persistent session is kept after DISCONNECT |
 | `networkPolicy.enabled` | `false` | MQTT from anywhere; internal listener, metrics and monitor from this namespace and `networkPolicy.internalFrom` only |
 | `metrics.enabled` | `true` | Publishes the metrics port on the `-internal` Service. The pod serves it either way, because readiness uses it |
@@ -134,6 +138,23 @@ Every pod serves `/metrics`, `/healthz`, `/readyz` and `/debug/pprof` on `metric
 | `MastQueuerBacklog` | The queuer keeps more absent sessions than `queuerAwaySessionsThreshold` for an hour (when set) |
 
 The readiness alerts read `kube_pod_status_ready` from kube-state-metrics rather than anything mast exports, because a pod that cannot serve often cannot say so either. The durable and queuer alerts are left out when `fabric.durableQoS` is off, since nothing then reads the stream.
+
+## Tracing
+
+`tracing.enabled` makes every edge, or the standalone pod, export OpenTelemetry traces of the message path over OTLP/HTTP: `mqtt.publish` where a message arrives, the durable store and the NATS publish under it, and `mqtt.deliver` on every node that delivers it. Cores build no tracer, since they have no MQTT side. It needs a mast release that reads `[tracing]`; older ones ignore it.
+
+```yaml
+tracing:
+  enabled: true
+  endpoint: http://otel-collector.monitoring:4318
+  sampler: parentbased_traceidratio
+  samplerArg: "0.01"
+  existingSecret: mast-otel   # holds OTEL_EXPORTER_OTLP_HEADERS
+```
+
+For a fleet, sample with `parentbased_traceidratio`: the ingress decides once per message and every delivering node follows, so a trace is whole or absent. With `sampler` empty every message is traced, which costs about 13% more CPU per message. An MQTT 5 client that sends a `traceparent` user property gets the publish inside its own trace, but its sampled flag never overrides the ratio.
+
+A collector's API key goes in `OTEL_EXPORTER_OTLP_HEADERS` (`authorization=Bearer …`) in the Secret named by `tracing.existingSecret`, never in values. Any other `OTEL_*` variable (`OTEL_RESOURCE_ATTRIBUTES`, `OTEL_BSP_MAX_QUEUE_SIZE`, …) can go there too, or in `extraEnv`. The `[tracing]` block is rendered only when tracing is on, so upgrading the chart with it off does not roll the edges.
 
 ## Network policy
 
