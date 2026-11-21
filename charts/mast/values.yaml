@@ -236,6 +236,34 @@ tracing:
   # never in values or the ConfigMap.
   existingSecret: ""
 
+# The admin HTTP API: list a tenant's sessions, read one, disconnect a
+# client, and a tenant's counts, for the whole cluster from any pod. Off by
+# default because it can disconnect devices. On every role, a core included,
+# on its own port, published only on the internal Services and never on the
+# public one, and with no Ingress: reach it with kubectl port-forward or from
+# inside the cluster. Rendered only when on, so an upgrade with it off rolls
+# nothing. Needs a mast that reads [admin] (after v0.3.2); an older one
+# ignores the block and serves nothing.
+admin:
+  enabled: false
+  # Its own listener, apart from metrics.port, because anything that can
+  # scrape the metrics port could otherwise disconnect devices.
+  port: 9091
+  # How long a list or stats request waits for every pod to answer. Every
+  # such request waits this long, and a pod slower than it is missing from
+  # the answer, which says how many answered. mast refuses more than 5s.
+  gather: 500ms
+  # The bearer token comes from a Secret, mounted as a file and read once at
+  # startup; mast has no setting for the token itself, so it never lands in
+  # the ConfigMap or the environment. Name a Secret you manage here, holding
+  # the token under secretKey. Changing the token takes a pod restart.
+  existingSecret: ""
+  secretKey: token
+  # Or have the chart create that Secret from this value, at least 16
+  # bytes. Prefer existingSecret: a value here sits in the release's stored
+  # values and in whatever file you passed with -f.
+  token: ""
+
 session:
   # How long a disconnected persistent session and its queued QoS 1/2
   # messages are kept, counted from DISCONNECT.

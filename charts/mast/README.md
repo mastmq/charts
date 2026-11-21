@@ -65,7 +65,7 @@ Each shape gets two Services, and only one of them is meant to be reachable from
 | Service | Type | Ports |
 | --- | --- | --- |
 | `<fullname>` (standalone) or `<fullname>-edge` (cluster) | `edge.service.type` | `mqtt`, and `mqtt-ws` when `edge.wsPort` is set |
-| the same name with `-internal` appended | always `ClusterIP` | `mqtt-internal` when `edge.internalPort` is set, `metrics`, `monitor` (8222) |
+| the same name with `-internal` appended | always `ClusterIP` | `mqtt-internal` when `edge.internalPort` is set, `metrics`, `monitor` (8222), `admin` when `admin.enabled` |
 
 The split exists because `edge.service.type: LoadBalancer` used to publish everything on one Service: the internal listener, which skips authentication and authorization entirely, the metrics port, which also serves `/debug/pprof`, and the NATS monitor. The internal Service is still reachable from any pod in the cluster, so pair `edge.internalPort` with a NetworkPolicy if the cluster is shared.
 
@@ -101,6 +101,11 @@ The split exists because `edge.service.type: LoadBalancer` used to publish every
 | `tracing.endpoint` | `""` | The OTLP/HTTP collector, e.g. `http://otel-collector.monitoring:4318` |
 | `tracing.sampler`, `tracing.samplerArg` | `""` | An `OTEL_TRACES_SAMPLER` name and its ratio as a string; each empty one defers to its variable |
 | `tracing.existingSecret` | `""` | A Secret you manage whose keys are `OTEL_*` variables, for `OTEL_EXPORTER_OTLP_HEADERS` |
+| `admin.enabled` | `false` | The admin HTTP API, on every role; it can disconnect devices. See [Admin API](#admin-api) |
+| `admin.port` | `9091` | Published on the `-internal` Service and the core Service, never on the public one |
+| `admin.gather` | `500ms` | How long a list or stats request waits for every pod; at most `5s` |
+| `admin.existingSecret`, `admin.secretKey` | `""`, `token` | A Secret you manage holding the bearer token under that key, mounted at `/etc/mast/admin` |
+| `admin.token` | `""` | Or a token, at least 16 bytes, for the chart to put in a Secret of its own; `existingSecret` is preferred |
 | `session.expiry` | `24h` | How long a persistent session is kept after DISCONNECT |
 | `networkPolicy.enabled` | `false` | MQTT from anywhere; internal listener, metrics and monitor from this namespace and `networkPolicy.internalFrom` only |
 | `metrics.enabled` | `true` | Publishes the metrics port on the `-internal` Service. The pod serves it either way, because readiness uses it |
@@ -156,9 +161,29 @@ For a fleet, sample with `parentbased_traceidratio`: the ingress decides once pe
 
 A collector's API key goes in `OTEL_EXPORTER_OTLP_HEADERS` (`authorization=Bearer …`) in the Secret named by `tracing.existingSecret`, never in values. Any other `OTEL_*` variable (`OTEL_RESOURCE_ATTRIBUTES`, `OTEL_BSP_MAX_QUEUE_SIZE`, …) can go there too, or in `extraEnv`. The `[tracing]` block is rendered only when tracing is on, so upgrading the chart with it off does not roll the edges.
 
+## Admin API
+
+`admin.enabled` serves mast's admin HTTP API on `admin.port` on every pod, a core included: list a tenant's sessions, read one, disconnect a client, and a tenant's counts. Any pod answers for the whole cluster, by asking every other pod over NATS and waiting `admin.gather` for them, so one port-forward is enough. It needs a mast release that reads `[admin]`; older ones ignore it and serve nothing.
+
+**It can disconnect any tenant's devices**, so it is published only on the `-internal` Service and the core's headless Service, never on the client-facing one, the chart renders no Ingress for it, and with `networkPolicy.enabled` it is open only to the namespace and `networkPolicy.internalFrom`.
+
+```yaml
+admin:
+  enabled: true
+  existingSecret: mast-admin   # holds the token under the key "token"
+```
+
+```console
+$ kubectl create secret generic mast-admin --from-literal=token="$(openssl rand -hex 32)"
+$ kubectl port-forward svc/mast-edge-internal 9091
+$ curl -H "Authorization: Bearer $(kubectl get secret mast-admin -o jsonpath='{.data.token}' | base64 -d)" localhost:9091/v1/tenants/acme/stats
+```
+
+The token reaches mast as a file mounted from the Secret, because mast has no setting for the token itself: it never sits in the ConfigMap or the environment. mast reads it once at startup and refuses to start with an empty or missing file, or one shorter than 16 bytes, and the chart refuses to render with neither `existingSecret` nor `token`. Changing the token takes `kubectl rollout restart` of the edges and the cores; a changed Secret alone does nothing. `admin.token` exists for a quick start, but it puts the token in the release's stored values. The `[admin]` block is rendered only when the API is on, so upgrading the chart with it off rolls nothing.
+
 ## Network policy
 
-`networkPolicy.enabled` adds a policy per role. On an edge or a standalone pod, MQTT and MQTT over WebSocket are open to anyone who can route to the pod, and the unauthenticated internal listener, metrics (which serves pprof) and the NATS monitor are open only to pods in the release's namespace and to the peers in `networkPolicy.internalFrom`. A core accepts only from the same set.
+`networkPolicy.enabled` adds a policy per role. On an edge or a standalone pod, MQTT and MQTT over WebSocket are open to anyone who can route to the pod, and the unauthenticated internal listener, metrics (which serves pprof), the NATS monitor and the admin API are open only to pods in the release's namespace and to the peers in `networkPolicy.internalFrom`. A core accepts only from the same set.
 
 Kubernetes network policies can only add allowed traffic, never subtract it. In a namespace that already allows everything from everywhere — OpenShift projects commonly carry an `allow-from-all-namespaces` policy — enabling this restricts nothing, and the internal listener stays reachable cluster-wide. Check `kubectl get networkpolicy` before relying on it, and if the namespace allows everything and the internal listener is not needed, set `edge.internalPort: 0` instead.
 

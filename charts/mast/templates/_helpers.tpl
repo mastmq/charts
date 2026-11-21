@@ -120,6 +120,71 @@ sampler_arg = {{ . | quote }}
 {{- end }}
 
 {{/*
+The Secret holding the admin API's token, whether the user manages it or
+the chart renders it from admin.token.
+*/}}
+{{- define "mast.adminSecretName" -}}
+{{- if .Values.admin.existingSecret }}
+{{- .Values.admin.existingSecret }}
+{{- else }}
+{{- printf "%s-admin" (include "mast.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+The [admin] block, for every role: any node answers for the whole cluster,
+a core included. Rendered only when the API is on, for the same reason as
+[tracing]. The token is a file from the Secret, never a value here.
+*/}}
+{{- define "mast.adminConfig" -}}
+{{- with .Values.admin }}
+{{- if .enabled }}
+{{- if not (or .existingSecret .token) }}{{ fail "admin.enabled needs admin.existingSecret or admin.token: mast refuses to serve the API without a token" }}{{ end }}
+{{- if has (int .port) (list 1883 4222 6222 7422 8222 (int $.Values.metrics.port) (int $.Values.edge.internalPort) (int $.Values.edge.wsPort)) }}{{ fail "admin.port collides with another port of the pod" }}{{ end }}
+[admin]
+addr = "0.0.0.0:{{ .port }}"
+token_file = "/etc/mast/admin/{{ .secretKey }}"
+gather = {{ .gather | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+The admin token's mount and volume, for every role. A directory of its own
+under /etc/mast, as the ConfigMap holds /etc/mast itself. Not optional: mast
+refuses to start without the file, and a pod held in ContainerCreating with
+an event naming the Secret says so more plainly than a crash loop.
+*/}}
+{{- define "mast.adminMount" -}}
+{{- if .Values.admin.enabled }}
+- name: admin
+  mountPath: /etc/mast/admin
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{- define "mast.adminVolume" -}}
+{{- if .Values.admin.enabled }}
+- name: admin
+  secret:
+    secretName: {{ include "mast.adminSecretName" . }}
+    items:
+      - key: {{ .Values.admin.secretKey }}
+        path: {{ .Values.admin.secretKey }}
+{{- end }}
+{{- end }}
+
+{{/*
+The admin container port, for every role.
+*/}}
+{{- define "mast.adminPort" -}}
+{{- if .Values.admin.enabled }}
+- name: admin
+  containerPort: {{ .Values.admin.port }}
+{{- end }}
+{{- end }}
+
+{{/*
 envFrom for the roles with an MQTT side: the auth header Secret in http mode,
 and the OTEL_* Secret when tracing is on. Both are optional, as a missing
 Secret should cost the feature it configures, not the pod.

@@ -42,4 +42,8 @@ data:
 
     {{ . | nindent 4 | trim }}
     {{- end }}
+    {{- with include "mast.adminConfig" . }}
+
+    {{ . | nindent 4 | trim }}
+    {{- end }}
 {{- end }}

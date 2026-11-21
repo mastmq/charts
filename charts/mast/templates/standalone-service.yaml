@@ -58,4 +58,11 @@ spec:
     - name: monitor
       port: 8222
       targetPort: monitor
+    {{- if .Values.admin.enabled }}
+    # The admin API can disconnect devices, so it is here and never on the
+    # public Service. Any pod answers for the whole cluster.
+    - name: admin
+      port: {{ .Values.admin.port }}
+      targetPort: admin
+    {{- end }}
 {{- end }}

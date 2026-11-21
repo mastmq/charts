@@ -68,6 +68,7 @@ spec:
               containerPort: 8222
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
+            {{- with (include "mast.adminPort" . | trim) }}{{ . | nindent 12 }}{{ end }}
           # mast's /readyz, on the metrics port where mast's own server
           # answers it. On an all-in-one node it is nats-server's JetStream
           # health check, so the pod is not Ready while the store is still
@@ -87,11 +88,13 @@ spec:
             - name: data
               mountPath: /data
             {{- with (include "mast.secretMounts" . | trim) }}{{ . | nindent 12 }}{{ end }}
+            {{- with (include "mast.adminMount" . | trim) }}{{ . | nindent 12 }}{{ end }}
       volumes:
         - name: config
           configMap:
             name: {{ include "mast.fullname" . }}
         {{- with (include "mast.secretVolumes" . | trim) }}{{ . | nindent 8 }}{{ end }}
+        {{- with (include "mast.adminVolume" . | trim) }}{{ . | nindent 8 }}{{ end }}
         {{- if not .Values.core.persistence.enabled }}
         - name: data
           emptyDir: {}

@@ -1,0 +1,7 @@
+# The admin API on in the standalone shape, with the chart rendering the
+# token's Secret from a value. The token is a placeholder for the render;
+# never put a real one in a file like this.
+mode: standalone
+admin:
+  enabled: true
+  token: ci-placeholder-not-a-real-token

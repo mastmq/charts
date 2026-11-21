@@ -1,0 +1,11 @@
+# The admin API on in the cluster shape, from a Secret the operator manages,
+# with the network policy on, so the [admin] block renders on cores and edges
+# alike, the token mounts on both, and the port is published on the internal
+# Services and let through the policy.
+admin:
+  enabled: true
+  existingSecret: mast-admin
+  secretKey: admin-token
+  gather: 2s
+networkPolicy:
+  enabled: true

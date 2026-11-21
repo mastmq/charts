@@ -27,4 +27,8 @@ data:
 
     [obs]
     addr = "0.0.0.0:{{ .Values.metrics.port }}"
+    {{- with include "mast.adminConfig" . }}
+
+    {{ . | nindent 4 | trim }}
+    {{- end }}
 {{- end }}

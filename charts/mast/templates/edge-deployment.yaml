@@ -79,6 +79,7 @@ spec:
               containerPort: 8222
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
+            {{- with (include "mast.adminPort" . | trim) }}{{ . | nindent 12 }}{{ end }}
           # Readiness is mast's /readyz, which on an edge is the leaf link
           # to the core. A TCP check on the MQTT port passed while that link
           # was down, so the Service kept handing devices to an edge that
@@ -106,11 +107,13 @@ spec:
               mountPath: /etc/mast
               readOnly: true
             {{- with (include "mast.secretMounts" . | trim) }}{{ . | nindent 12 }}{{ end }}
+            {{- with (include "mast.adminMount" . | trim) }}{{ . | nindent 12 }}{{ end }}
       volumes:
         - name: config
           configMap:
             name: {{ include "mast.edge.fullname" . }}
         {{- with (include "mast.secretVolumes" . | trim) }}{{ . | nindent 8 }}{{ end }}
+        {{- with (include "mast.adminVolume" . | trim) }}{{ . | nindent 8 }}{{ end }}
       {{- with .Values.edge.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

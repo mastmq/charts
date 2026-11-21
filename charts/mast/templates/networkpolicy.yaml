@@ -32,6 +32,9 @@ spec:
         {{- end }}
         - port: metrics
         - port: monitor
+        {{- if .Values.admin.enabled }}
+        - port: admin
+        {{- end }}
 {{- if eq .Values.mode "cluster" }}
 ---
 # The core terminates no MQTT. Only the edges and the other cores, all in

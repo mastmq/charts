@@ -70,6 +70,7 @@ spec:
               containerPort: 8222
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
+            {{- with (include "mast.adminPort" . | trim) }}{{ . | nindent 12 }}{{ end }}
           # Liveness and readiness ask different questions on purpose. A bare
           # /healthz also checks JetStream, which is unhealthy exactly while a
           # peer is catching up or the meta group has lost quorum; used for
@@ -116,10 +117,12 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+            {{- with (include "mast.adminMount" . | trim) }}{{ . | nindent 12 }}{{ end }}
       volumes:
         - name: config
           configMap:
             name: {{ include "mast.core.fullname" . }}
+        {{- with (include "mast.adminVolume" . | trim) }}{{ . | nindent 8 }}{{ end }}
         {{- if not .Values.core.persistence.enabled }}
         - name: data
           emptyDir: {}

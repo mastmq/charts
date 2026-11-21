@@ -33,4 +33,9 @@ spec:
     - name: metrics
       port: {{ .Values.metrics.port }}
       targetPort: metrics
+    {{- if .Values.admin.enabled }}
+    - name: admin
+      port: {{ .Values.admin.port }}
+      targetPort: admin
+    {{- end }}
 {{- end }}

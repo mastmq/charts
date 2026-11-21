@@ -540,6 +540,39 @@
       },
       "additionalProperties": false
     },
+    "admin": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "gather": {
+          "type": "string",
+          "pattern": "^([1-9][0-9]{0,2}ms|[1-4][0-9]{3}ms|5000ms|[1-4](\\.[0-9]+)?s|5(\\.0+)?s|0?\\.[0-9]*[1-9][0-9]*s)$",
+          "description": "How long a list or stats request waits for every pod, e.g. \"500ms\" or \"2s\". Positive and at most 5s, as mast requires."
+        },
+        "existingSecret": {
+          "type": "string",
+          "description": "A Secret you manage, holding the bearer token under secretKey."
+        },
+        "secretKey": {
+          "type": "string",
+          "pattern": "^[-._a-zA-Z0-9]+$",
+          "description": "The key of the token in the Secret, which is also the file name it is mounted under."
+        },
+        "token": {
+          "type": "string",
+          "pattern": "^(|[\\s\\S]{16,})$",
+          "description": "A token for the chart to put in a Secret of its own when existingSecret is empty. At least 16 bytes."
+        }
+      },
+      "additionalProperties": false
+    },
     "tracing": {
       "type": "object",
       "properties": {
