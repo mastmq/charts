@@ -192,6 +192,11 @@ auth:
     # A boolean claim that bypasses authorization, as EMQX's is_superuser
     # does.
     superuserClaim: ""
+    # An object claim that overrides the tenant's limits, with the keys of
+    # a [limits.tenants.<id>] entry in mast's own spelling:
+    # {"max_connections":500,"publish_rate":50}. The newest token's claim
+    # wins, by iat. Empty reads no limits from tokens.
+    limitsClaim: ""
     # Checked against the token when set.
     issuer: ""
     audience: ""
@@ -269,6 +274,43 @@ session:
   # messages are kept, counted from DISCONNECT.
   expiry: 24h
 
+# Per-tenant limits. The defaults here are mast's own, and the [limits] block
+# is rendered only when one of them changes, so an upgrade that leaves them
+# alone does not change the ConfigMaps and roll every edge. Cores and edges
+# render the same block: only a core sets how many messages the offline
+# stream keeps per session, and it sizes that from the largest
+# offlineQueue here or under tenants. Needs a mast that reads [limits]
+# (after v0.3.2); an older one ignores it.
+limits:
+  # A tenant's open connections across the whole cluster; 0 is unlimited.
+  # Pods exchange counts every syncInterval over core NATS rather than
+  # writing a counter on every CONNECT, so a burst spread over several edges
+  # can overshoot it by what they accept within one interval. Refused with
+  # CONNACK 0x97 Quota exceeded on MQTT 5, 0x03 Server unavailable on 3.1.1.
+  maxConnections: 0
+  # PUBLISH packets per second per tenant, enforced on each pod separately,
+  # so an HPA that adds edges raises what a tenant can send through them all;
+  # 0 is unlimited. Over it, QoS 0 is dropped, MQTT 5 QoS 1 gets PUBACK 0x96,
+  # and MQTT 5 QoS 2 and MQTT 3.1.1 QoS 1/2 are disconnected.
+  publishRate: 0
+  # Publishes that may arrive at once before the rate applies; 0 is one
+  # second's worth.
+  publishBurst: 0
+  # QoS 1/2 messages kept for one absent session, newest first. It also
+  # bounds what a device coming back to the pod it left is resent, which
+  # before limits was everything mochi held for it.
+  offlineQueue: 100
+  syncInterval: 2s
+  # Overrides for named tenants, field by field; a field left out keeps the
+  # default above. A tenant id must be letters, digits, - and _ to be named
+  # here. The authentication backend can override these per tenant too (a
+  # "limits" object in an HTTP reply, or auth.jwt.limitsClaim).
+  tenants: {}
+  #  acme:
+  #    maxConnections: 5000
+  #    publishRate: 200
+  #    offlineQueue: 500
+
 # Restricts who can reach the pods. Off by default because a policy that
 # selects a pod turns every port not listed into denied, and the right peers
 # are cluster-specific. Note that Kubernetes policies only ever add allowed
@@ -289,6 +331,11 @@ metrics:
   # the readiness probe and /debug/pprof.
   enabled: true
   port: 9090
+  # How many tenants get a label of their own on each pod's per-tenant
+  # metrics; the rest are counted together as tenant="~other". 0 is
+  # unbounded, which is fine for a handful of tenants and a Prometheus outage
+  # for ten thousand.
+  maxTenantLabels: 1000
   # Requires the Prometheus operator CRDs.
   serviceMonitor:
     enabled: false

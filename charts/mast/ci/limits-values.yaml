@@ -1,0 +1,18 @@
+# Per-tenant limits in the cluster shape, with defaults, two tenants'
+# overrides and a bounded tenant label count, so the [limits] block and its
+# [limits.tenants.<id>] tables render on cores and edges alike. One tenant
+# sets only some fields, which must leave the others out of its table.
+limits:
+  maxConnections: 10000
+  publishRate: 500.5
+  publishBurst: 1000
+  offlineQueue: 200
+  tenants:
+    acme:
+      maxConnections: 5000
+      publishRate: 200
+      offlineQueue: 1000
+    small-co:
+      publishRate: 10
+metrics:
+  maxTenantLabels: 200

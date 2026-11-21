@@ -13,3 +13,4 @@ auth:
     publicKeyKey: jwt.pub
     tenantClaim: tenant
     superuserClaim: admin
+    limitsClaim: limits

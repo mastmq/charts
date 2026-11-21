@@ -1,0 +1,5 @@
+# One limit changed from mast's default in the standalone shape, which is
+# enough to render the whole [limits] block there.
+mode: standalone
+limits:
+  offlineQueue: 50

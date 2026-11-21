@@ -434,6 +434,9 @@
             "superuserClaim": {
               "type": "string"
             },
+            "limitsClaim": {
+              "type": "string"
+            },
             "issuer": {
               "type": "string"
             },
@@ -620,6 +623,65 @@
       },
       "additionalProperties": false
     },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "maxConnections": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 is unlimited."
+        },
+        "publishRate": {
+          "type": "number",
+          "minimum": 0,
+          "description": "PUBLISH packets per second per tenant per pod; 0 is unlimited."
+        },
+        "publishBurst": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 is one second's worth."
+        },
+        "offlineQueue": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "mast refuses a queue of nothing."
+        },
+        "syncInterval": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$",
+          "description": "A positive Go duration."
+        },
+        "tenants": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "maxConnections": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "publishRate": {
+                "type": "number",
+                "minimum": 0
+              },
+              "publishBurst": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "offlineQueue": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "networkPolicy": {
       "type": "object",
       "properties": {
@@ -646,6 +708,11 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 65535
+        },
+        "maxTenantLabels": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 is unbounded."
         },
         "serviceMonitor": {
           "type": "object",

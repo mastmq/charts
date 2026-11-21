@@ -38,6 +38,13 @@ data:
 
     [obs]
     addr = "0.0.0.0:{{ .Values.metrics.port }}"
+    {{- if ne (int .Values.metrics.maxTenantLabels) 1000 }}
+    max_tenant_labels = {{ int .Values.metrics.maxTenantLabels }}
+    {{- end }}
+    {{- with include "mast.limitsConfig" . }}
+
+    {{ regexReplaceAll "\n +\n" (. | nindent 4 | trim) "\n\n" }}
+    {{- end }}
     {{- with include "mast.tracingConfig" . }}
 
     {{ . | nindent 4 | trim }}

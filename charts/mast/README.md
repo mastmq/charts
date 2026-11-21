@@ -94,6 +94,7 @@ The split exists because `edge.service.type: LoadBalancer` used to publish every
 | `auth.jwt.algorithms` | `[]` | Required in `jwt` mode; no default on purpose |
 | `auth.jwt.keySecret` | `""` | A Secret you manage, mounted at `/etc/mast/jwt` |
 | `auth.jwt.hmacSecretKey`, `auth.jwt.publicKeyKey` | `""` | The key in that Secret; exactly one |
+| `auth.jwt.limitsClaim` | `""` | An object claim overriding the tenant's limits; see [Tenant limits](#tenant-limits) |
 | `tls.secretName` | `""` | A `kubernetes.io/tls` Secret; the MQTT listener then speaks only TLS |
 | `fabric.durableQoS` | `true` | Stores QoS 1 and 2 on a replicated stream before acknowledging, so they survive a node being cut off; `false` makes them at-most-once across nodes |
 | `fabric.durableMaxAge` | `5m` | How long a node can be cut off and still catch up |
@@ -107,8 +108,14 @@ The split exists because `edge.service.type: LoadBalancer` used to publish every
 | `admin.existingSecret`, `admin.secretKey` | `""`, `token` | A Secret you manage holding the bearer token under that key, mounted at `/etc/mast/admin` |
 | `admin.token` | `""` | Or a token, at least 16 bytes, for the chart to put in a Secret of its own; `existingSecret` is preferred |
 | `session.expiry` | `24h` | How long a persistent session is kept after DISCONNECT |
+| `limits.maxConnections` | `0` | A tenant's open connections across the cluster, counted approximately; `0` is unlimited. See [Tenant limits](#tenant-limits) |
+| `limits.publishRate`, `limits.publishBurst` | `0`, `0` | PUBLISH packets per second per tenant, on each pod separately, and the burst before it applies; `0` is unlimited, and a burst of `0` is one second's worth |
+| `limits.offlineQueue` | `100` | QoS 1/2 messages kept for one absent session, newest first |
+| `limits.syncInterval` | `2s` | How often pods exchange their per-tenant connection counts |
+| `limits.tenants` | `{}` | Overrides for named tenants, field by field |
 | `networkPolicy.enabled` | `false` | MQTT from anywhere; internal listener, metrics and monitor from this namespace and `networkPolicy.internalFrom` only |
 | `metrics.enabled` | `true` | Publishes the metrics port on the `-internal` Service. The pod serves it either way, because readiness uses it |
+| `metrics.maxTenantLabels` | `1000` | Tenants with a label of their own on per-tenant metrics, per pod; the rest are `tenant="~other"`. `0` is unbounded |
 | `metrics.serviceMonitor.enabled` | `false` | Needs the Prometheus operator CRDs. Scrapes edges, standalone and cores |
 | `metrics.grafanaDashboard.enabled` | `false` | A ConfigMap for the Grafana sidecar; see [Monitoring](#monitoring) |
 | `metrics.grafanaDashboard.labels` | `grafana_dashboard: "1"` | The label the sidecar watches for |
@@ -180,6 +187,26 @@ $ curl -H "Authorization: Bearer $(kubectl get secret mast-admin -o jsonpath='{.
 ```
 
 The token reaches mast as a file mounted from the Secret, because mast has no setting for the token itself: it never sits in the ConfigMap or the environment. mast reads it once at startup and refuses to start with an empty or missing file, or one shorter than 16 bytes, and the chart refuses to render with neither `existingSecret` nor `token`. Changing the token takes `kubectl rollout restart` of the edges and the cores; a changed Secret alone does nothing. `admin.token` exists for a quick start, but it puts the token in the release's stored values. The `[admin]` block is rendered only when the API is on, so upgrading the chart with it off rolls nothing.
+
+## Tenant limits
+
+`limits` sets what each tenant may use: open connections across the cluster, a publish rate on each pod, and how many QoS 1/2 messages are kept for an absent session. It needs a mast release that reads `[limits]`; older ones ignore it.
+
+```yaml
+limits:
+  maxConnections: 10000
+  publishRate: 500
+  tenants:
+    acme:
+      maxConnections: 50000
+      offlineQueue: 1000
+```
+
+The connection count is shared between pods every `syncInterval` over core NATS, so a burst of connections spread over several edges can overshoot the limit by what they accept within one interval; that is the price of not writing a replicated counter on every CONNECT. The publish rate is enforced on each pod separately, so adding edges, by hand or by the HPA, raises what a tenant can send through all of them. Over a limit a client hears CONNACK 0x97 or PUBACK 0x96 on MQTT 5, and the nearest MQTT 3.1.1 has, which for a publish is a disconnect.
+
+`offlineQueue` defaults to 100 and applies without a `limits` block: it is also the most a device coming back to the pod it left is resent. Cores and edges render the same `[limits]` block, because only a core sizes the offline stream, from the largest `offlineQueue` here or under `tenants`; the authentication backend can lower a tenant's queue but not raise it past that. A tenant id named under `tenants` must be letters, digits, `-` and `_`, and the schema refuses anything else.
+
+The authentication backend can override the limits per tenant: a `limits` object in an HTTP reply, or the JWT claim named by `auth.jwt.limitsClaim`, with mast's own keys (`max_connections`, `publish_rate`, `publish_burst`, `offline_queue`). `mast_limit_exceeded_total{tenant, limit}` counts what each limit refused. The `[limits]` block is rendered only when a value differs from mast's default, so upgrading the chart with them alone rolls nothing.
 
 ## Network policy
 

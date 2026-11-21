@@ -120,6 +120,44 @@ sampler_arg = {{ . | quote }}
 {{- end }}
 
 {{/*
+The [limits] block, for every role: an edge or the standalone pod enforces
+the limits, and a core sizes the offline stream from the largest
+offlineQueue, so both tiers must read the same block. Rendered only when a
+value differs from mast's own default, for the same reason as [tracing]. A
+tenant's entry writes only the fields it sets, because a field left out
+means "keep the default", not zero.
+*/}}
+{{- define "mast.limitsConfig" -}}
+{{- with .Values.limits }}
+{{- if or (gt (int .maxConnections) 0) (gt (float64 .publishRate) 0.0) (gt (int .publishBurst) 0) (ne (int .offlineQueue) 100) (ne (toString .syncInterval) "2s") .tenants }}
+[limits]
+max_connections = {{ int .maxConnections }}
+publish_rate = {{ float64 .publishRate }}
+publish_burst = {{ int .publishBurst }}
+offline_queue = {{ int .offlineQueue }}
+sync_interval = {{ .syncInterval | quote }}
+{{- range $id, $t := .tenants }}
+{{- if not (regexMatch "^[A-Za-z0-9_-]+$" $id) }}{{ fail (printf "limits.tenants: %q is not a tenant id the chart can name; use letters, digits, - and _" $id) }}{{ end }}
+
+[limits.tenants.{{ $id }}]
+{{- if hasKey $t "maxConnections" }}
+max_connections = {{ int $t.maxConnections }}
+{{- end }}
+{{- if hasKey $t "publishRate" }}
+publish_rate = {{ float64 $t.publishRate }}
+{{- end }}
+{{- if hasKey $t "publishBurst" }}
+publish_burst = {{ int $t.publishBurst }}
+{{- end }}
+{{- if hasKey $t "offlineQueue" }}
+offline_queue = {{ int $t.offlineQueue }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
 The Secret holding the admin API's token, whether the user manages it or
 the chart renders it from admin.token.
 */}}
@@ -248,6 +286,9 @@ public_key_file = "/etc/mast/jwt/{{ $j.publicKeyKey }}"
 {{- end }}
 tenant_claim = {{ $j.tenantClaim | quote }}
 superuser_claim = {{ $j.superuserClaim | quote }}
+{{- with $j.limitsClaim }}
+limits_claim = {{ . | quote }}
+{{- end }}
 issuer = {{ $j.issuer | quote }}
 audience = {{ $j.audience | quote }}
 {{- end }}
