@@ -202,7 +202,7 @@ limits:
       offlineQueue: 1000
 ```
 
-The connection count is shared between pods every `syncInterval` over core NATS, so a burst of connections spread over several edges can overshoot the limit by what they accept within one interval; that is the price of not writing a replicated counter on every CONNECT. The publish rate is enforced on each pod separately, so adding edges, by hand or by the HPA, raises what a tenant can send through all of them. Over a limit a client hears CONNACK 0x97 or PUBACK 0x96 on MQTT 5, and the nearest MQTT 3.1.1 has, which for a publish is a disconnect.
+The connection count is shared between pods every `syncInterval` over core NATS, so a burst of connections spread over several edges can overshoot the limit by what they accept within one interval; that is the price of not writing a replicated counter on every CONNECT. The publish rate is enforced on each pod separately, so adding edges, by hand or by the HPA, raises what a tenant can send through all of them. Over a limit a client hears CONNACK 0x97 or PUBACK 0x97 on MQTT 5 (a QoS 2 publish, DISCONNECT 0x96), and the nearest MQTT 3.1.1 has, which for a publish is a disconnect.
 
 `offlineQueue` defaults to 100 and applies without a `limits` block: it is also the most a device coming back to the pod it left is resent. Cores and edges render the same `[limits]` block, because only a core sizes the offline stream, from the largest `offlineQueue` here or under `tenants`; the authentication backend can lower a tenant's queue but not raise it past that. A tenant id named under `tenants` must be letters, digits, `-` and `_`, and the schema refuses anything else.
 
